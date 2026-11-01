@@ -182,14 +182,6 @@ The project can choose another spec root. `implementation-brief.md` is optional.
 
 Artifact paths are relative to `acceptance/`, for example `evidence/order.png`. Shared material can point to the Story that owns it. Keep one acceptance conclusion for each Story.
 
-The [order-entry example](./examples/cycle-01-orders/cycle.md) has two dependent Stories, both still pending. Read its overview or prepare both Stories with:
-
-```sh
-nanospec validate examples/cycle-01-orders
-nanospec show overview examples/cycle-01-orders
-nanospec prepare examples/cycle-01-orders/story-01-save-order examples/cycle-01-orders/story-02-find-order
-```
-
 ## From requirements to execution
 
 1. Read the project rules, source requirements, and current code. Set the spec language.
