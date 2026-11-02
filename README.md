@@ -22,6 +22,59 @@ That is why NanoSpec has no permanent task layer. The Story defines the business
 
 My review stays with the business behavior: the interactions, API results, and saved state. Required public contracts remain in the Story, and project rules still constrain the implementation.
 
+### Story dependencies
+
+Each Story names the prerequisite results it needs in `depends_on`. NanoSpec generates a dependency graph and Dependency Waves from those declarations. This keeps actual blockers separate from the preferred order of work.
+
+Stories in the same Wave have no dependency path between them and may run in parallel when resources and project conditions allow. A Story waits only for its own prerequisites, so unrelated work in an earlier Wave can remain unfinished. Before execution, each prerequisite result must be verified, supported by applicable evidence, and available in the current environment. See [dependency readiness](./execution-rules.md#dependency-readiness).
+
+This Cycle spans sales, finance, and supporting changes. Each arrow points from a prerequisite to the Story that needs its result.
+
+#### Dependency Graph
+
+```mermaid
+flowchart TD
+  S18["S18 Bulk resolution of cargo owner and<br/>customer codes for opening balances"]
+  S17["S17 Save and preview<br/>registered manager photos"]
+  S16["S16 Redact sensitive data from<br/>request logs and error responses"]
+  S15["S15 Fix participant permissions for<br/>approval requests and attachments"]
+  S01["S01 Expose ERP results<br/>for sales invoices"]
+  S02["S02 Sales invoice requests<br/>and approval"]
+  S03["S03 Payment identification<br/>and outbound shipment matching"]
+  S04["S04 Downstream security deposit<br/>accounts and lifecycle"]
+  S05["S05 Standalone sales contracts"]
+  S20["S20 Virtual sales order corrections<br/>and status changes"]
+  S08["S08 Collection on behalf of others:<br/>registration and approval"]
+  S21["S21 Restore virtual sales<br/>order sources"]
+  S06["S06 Sales authorization letters"]
+  S09["S09 Sales invoice lookup<br/>and original documents"]
+  S10["S10 Cashier integration<br/>for security deposit refunds"]
+  S11["S11 Cash matching<br/>and financial reconciliation"]
+  S07["S07 Sales order line<br/>item combinations"]
+  S19["S19 Restrict customer validation permissions<br/>for opening standard advance receipts"]
+  S12["S12 Downstream opening<br/>advance receipts and receivables"]
+  S13["S13 Queries for matching receipts<br/>to receivable targets"]
+  S14["S14 Receivables summaries<br/>and downstream analysis"]
+
+  S20 --> S21
+  S17 --> S06
+  S16 --> S06
+  S15 --> S06
+  S01 --> S09
+  S02 --> S09
+  S04 --> S10
+  S03 --> S11
+  S04 --> S11
+  S21 --> S07
+  S18 --> S19
+  S11 --> S19
+  S19 --> S12
+  S12 --> S13
+  S12 --> S14
+```
+
+S06 can proceed once S17, S16, and S15 meet those readiness conditions, even while the invoice or deposit work is unfinished. S05 and S08 have no Story prerequisites in this plan. The graph makes both choices visible without reading every Story first.
+
 ## Get started
 
 For a small or midsize project, such as a simple e-commerce site, I usually split the requirements into three to five phases and keep each phase as independent as possible. I use NanoSpec to plan one phase at a time. That phase becomes a Cycle containing a set of Stories.
