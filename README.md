@@ -28,7 +28,7 @@ Each Story names the prerequisite results it needs in `depends_on`. NanoSpec gen
 
 Stories in the same Wave have no dependency path between them and may run in parallel when resources and project conditions allow. A Story waits only for its own prerequisites, so unrelated work in an earlier Wave can remain unfinished. Before execution, each prerequisite result must be verified, supported by applicable evidence, and available in the current environment. See [dependency readiness](./execution-rules.md#dependency-readiness).
 
-This Cycle spans sales, finance, and supporting changes. Each arrow points from a prerequisite to the Story that needs its result.
+The example below shows a Cycle spanning sales, finance, and supporting changes. Each arrow points from a prerequisite to the Story that needs its result.
 
 #### Dependency Graph
 
