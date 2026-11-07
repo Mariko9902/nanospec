@@ -93,39 +93,47 @@ The prompts below are adapted from my daily workflow. They assume NanoSpec is av
 I give the agent both the full requirements and the current phase's requirements. It needs the larger context while planning the current phase in detail.
 
 ```text
-We need to plan the development specifications for the current phase.
+We need to plan the development specifications (specs) for the current phase.
 
+Configuration:
+- Spec language: en-US
+- Rule sources: [] (replace with actual rule-pool paths if applicable)
+- Spec directory: ./spec/cycle-01-orders/
+
+First:
 1. Read the requirements:
-   - Full project requirements: <path-or-URL>
-   - Current phase requirements: <path-or-URL>
+   - Full project requirements: <path or URL>
+   - Current phase requirements: <path or URL>
 2. Analyze the current code in depth. Understand the repository structure,
    key business design, existing behavior, and relevant public contracts.
-3. Read ./nanospec/SKILL.md and the rules it selects for writing specs.
-4. Use the confirmed decisions from our discussion and the checked project
-   facts to prepare a complete set of specs for this phase.
+3. Read ./nanospec/SKILL.md and the rules and templates it selects for
+   writing specs.
 
-Spec language: en-US
-Rule sources: <explicit source paths, or []>
-Spec directory: ./spec/cycle-01-orders/
+Prepare a complete set of specs for this phase based on confirmed decisions
+from our discussion, the original requirements, and verified project facts.
+All writing, checking, and corrections must strictly follow the NanoSpec system.
 
-Before writing any specs, analyze the requirements and actual project.
-Report:
-- Any ambiguity, unclear expectation, or critical assumption.
-- Hidden requirements and likely risks.
-- Questions that need an answer to align the requirements.
-- Any gap in NanoSpec itself that prevents a clear specification of this work.
+Before writing any specs, thoroughly analyze the requirements and the current
+state of the project. Most importantly, clearly identify:
+- The goal of this phase and the gap between the current implementation
+  and that goal.
+- Any ambiguity, unclear expectations, and critical assumptions made.
+- Hidden requirements and potential risks.
+- Questions or decisions that require my input to align the requirements.
+- Whether NanoSpec adequately supports writing the specs for this phase,
+  and any gaps that affect planning.
 
-Investigate questions that can be answered from the repository. Do not draft
-the specs until the required clarifications have been answered.
+Investigate questions that can be answered from the requirements and project
+code. Clearly list questions that require my decision and wait for an answer.
+Do not substitute assumptions for required confirmation.
 
-Plan the complete current phase after clarification. Account for the details
-needed for independent implementation and acceptance: participants, entries,
-objects, business rules, dependencies, defaults, important non-success cases,
-and observable results.
+Do not draft specs until the required clarifications have been resolved.
+If no clarification is needed, explicitly state that and proceed.
 
-Write, check, and repair the specs through NanoSpec's rules and templates.
-Keep every Story self-contained. Validate and synchronize the Cycle, then
-complete the required independent review and resolve its findings.
+Plan the entire current phase in one pass. Account for the complete business
+flow, constraints, actual dependencies, and important exceptions needed to
+achieve the goal. Complete the decomposition, checks, corrections, and review
+required by NanoSpec.
 ```
 
 ### Execute one Story
