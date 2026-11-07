@@ -86,7 +86,7 @@ go install .
 nanospec version
 ```
 
-The prompts below are adapted from my daily workflow. They assume NanoSpec is available at `./nanospec/` from the project root, as a local checkout or symlink. Replace the document paths, initial reply language, and project tools to match the actual setup. The worktree and `better-playwright` requirements are part of this example's project workflow.
+The prompts below are adapted from my daily workflow. Adjust the NanoSpec location, document paths, and project tools to match the actual setup. The worktree and `better-playwright` requirements are part of this example's project workflow.
 
 ### Plan the current phase
 
@@ -138,56 +138,40 @@ required by NanoSpec.
 
 ### Execute one Story
 
-Once the phase is planned, I select a Story explicitly. This example uses `story-01-save-order` in `cycle-01-orders`.
+Once the phase is planned, I select a Story explicitly. Replace `<cycle-dir>` and `<story-dir>` below with the actual Cycle and Story directories.
 
 ```text
 Read:
-- Full project requirements: <path-or-URL>
-- Current phase requirements: <path-or-URL>
-- ./nanospec/SKILL.md, especially Execute
-- ./spec/cycle-01-orders/cycle.md
-- ./spec/cycle-01-orders/execution-state.md
-- ./spec/cycle-01-orders/story-01-save-order/story.md
+- Project development documentation: ./docs/develop/*
+- Current phase requirements: <package-NN-*.md>
+- <cycle-dir>/cycle.md
+- <cycle-dir>/execution-state.md
+- <cycle-dir>/<story-dir>/story.md
 
-The target is story-01-save-order.
-
-Before proposing a solution or writing code, analyze the requirements and
-current implementation. Reply in Chinese with:
-- The goal as understood from the requirements.
-- What the current implementation already provides.
-- The work needed to reach the goal and the gaps that remain.
-- Any ambiguity, unclear expectation, or critical assumption.
-- Questions that must be answered to align the requirements.
-
-Give me enough detail to confirm the understanding and fill any requirements
-gaps. Investigate repository questions first. Resolve required human decisions
-before implementation.
-
-Implementation:
+The goal is to implement the specified Story:
 - Assess whether this Story is ready to develop. If the specification or its
   prerequisites are insufficient, explain what needs to change.
-- Before editing project files, create a fresh Git worktree. Name its directory
-  <project-dir-name>-c<cycle-number>s<story-number>, for example shop-c1s1.
-  Keep all subsequent edits and verification in that worktree.
-- Carry over the required project files and symlinks, including AGENTS.md,
-  .agents, and nanospec where applicable. Preserve symlinks and check that
-  their targets still resolve from the new worktree.
-- From that worktree, run:
-  nanospec prepare ./spec/cycle-01-orders/story-01-save-order
-  Use the resulting execution package as the execution input. Check its
-  prerequisite states, evidence applicability, and environment availability.
+- If implementation may cross this Story's defined boundary, stop first and
+  explain why. Handle any specification adjustment through NanoSpec's change
+  rules before continuing.
+- Follow the Execute section of ~/coding/nanospec/SKILL.md to implement
+  this Story.
+- Before changing code, create a fresh Git worktree for this Story. Name its
+  directory <project-dir-name>-c<cycle-number>s<story-number>. Keep all
+  subsequent changes in that worktree. Carry over the required project files
+  and symlinks, including AGENTS.md, .agents, ai-issue-doc, and agents-rules.
+  Preserve symlinks and check that their targets still resolve from the new
+  worktree.
 - Follow AGENTS.md and NanoSpec's Execute rules throughout the work.
 - Keep execution state current through NanoSpec's lifecycle commands:
   checkpoint, evidence, verify, accept, and reject. Follow the declared
   acceptance policy. The execution protocol comes from the prepared package;
   execution-state.md records the current facts.
-- Stop before an implementation would cross this Story's defined boundary.
-  Explain the reason. Handle any specification change through NanoSpec's
-  change rules before continuing.
-- For blockers outside this Story's scope, stop and explain the problem in
-  plain, concise language. Examples include network failures, unusable login
-  accounts, unreachable APIs, missing response fields, or unexpected requests
-  and responses that prevent implementation or verification.
+- If implementation or verification encounters a blocker outside this Story's
+  scope, stop and explain it in plain, concise language. Examples include
+  network failures, unusable login accounts, unreachable APIs, API errors,
+  missing response fields, or any unexpected request or response that blocks
+  the work.
 
 Verification and delivery:
 - For APIs, follow the business flow in order. Capture and check the actual
@@ -204,10 +188,18 @@ Verification and delivery:
 - Where possible, run the full better-playwright verification after the
   implementation is complete. Avoid repeatedly running the full UI flow
   during development and spending tokens on the same checks.
-- Follow the Story's Acceptance Flow and record evidence for each Acceptance
-  ID. Complete the required review and delivery under its acceptance policy.
 - Provide a manual test entry: startup commands, access URLs, required
   accounts, and the steps needed to inspect the result.
+
+Before proposing any solution or writing code, analyze the requirements and
+the project's current implementation. Explain your understanding of the goal,
+what work is needed given the existing implementation, and the gap between
+the current state and that goal.
+
+Most importantly, clearly identify any ambiguity, unclear expectations, or
+key assumptions you have made, and list the questions that must be clarified
+to align the requirements. This step lets me confirm that your understanding
+matches my intent and exposes any missing or unclear requirements.
 ```
 
 English is the default. A request such as `Spec language: Japanese (Japan), ja-JP` changes the document language. The choice is stored in `cycle.md` as `spec_language` and carried into execution packages. Existing Cycles keep their recorded language unless explicitly changed.

@@ -18,7 +18,7 @@ Expand the scope when the effect is unclear or crosses shared data, states, APIs
 
 A lightweight spec fits a local result with a simple entry, few rules, and clear dependencies. It still needs every applicable check below.
 
-Use a full specification and review when the work involves multiple roles, permissions, sensitive data, financial amounts, billing, inventory, quotas, idempotency, concurrency, audit, state transitions, cancellation, retry, recovery, asynchronous events, migration, compatibility, cross-system effects, a new public contract, several entry points, or unresolved requirements conflicts.
+Use a full specification and review when the work involves multiple roles, permissions, sensitive operations or data, tenant boundaries or data scopes, financial amounts, billing, inventory, quotas, idempotency, concurrency, audit, state transitions, cancellation, retry, recovery, asynchronous events, migration, compatibility, cross-system effects, a new public contract, multiple entry points or consumers jointly determining one result, critical ambiguity in the source requirements, or a conflict between the requirements and the actual project.
 
 Full depth means explaining the risks that actually matter. It does not mean filling every optional section. Lightweight work still needs a clear boundary, actual entry, observable result, and acceptance route.
 

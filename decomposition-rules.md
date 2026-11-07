@@ -6,7 +6,7 @@ Turn source requirements and project facts into a Cycle, complete Stories, optio
 
 Start lightweight. A local result with a simple entry, few rules, clear dependencies, and no substantial risk usually needs Orientation, Description, and Acceptance. It still needs a complete account of how the result happens.
 
-Use full depth when the work involves multiple roles, permissions, sensitive data, money, billing, stock, quotas, idempotency, concurrency, audit, state transitions, cancellation, retries, recovery, asynchronous events, migration, compatibility, cross-system effects, new public contracts, several entry points, or unresolved conflicts between requirements and the project.
+Use full depth when the work involves multiple roles, permissions, sensitive operations or data, tenant boundaries or data scopes, money, billing, stock, quotas, idempotency, concurrency, audit, state transitions, cancellation, retries, recovery, asynchronous events, migration, compatibility, cross-system effects, new public contracts, multiple entry points or consumers jointly determining one result, critical ambiguity in the source requirements, or a conflict between the requirements and the actual project.
 
 Both depths use the same format, Story identity, dependencies, Acceptance Flow, stable IDs, and acceptance rules. There is no `spec_depth` field. Full depth means expanding the parts that explain the actual risk. It does not mean filling every optional section. Lightweight work cannot omit a necessary condition just to stay short.
 
@@ -190,7 +190,7 @@ Fix findings in their proper source. Put decisions still needed from a person in
 
 Confirm that every Story is one meaningful, independently acceptable result and accounts for every necessary participant and connection. Keep its requirements complete locally. Keep only real blocking facts in dependencies.
 
-Acceptance starts with a Mermaid route through preparation, the actual entry, main and important non-success paths, observations, evidence, and the decision. Nodes mark their Acceptance IDs and cover every condition. A provider without a separate page needs a delivered call example or other actual entry and a way to inspect persisted results.
+Acceptance starts with a Mermaid route through preparation, the actual entry, main and important non-success paths, observations, evidence, and the decision. Nodes mark their Acceptance IDs and cover every condition. A provider without a separate page needs a delivered call example or other executable entry, an observable execution result, and, when data is saved, a way to verify the persisted result.
 
 The flow organizes rules already defined. Checks can provide repeatable operations when a real command and environment exist. They support only their actual observations and do not grant final acceptance. The executor performs available steps, records what cannot be done, and keeps unresolved observations pending. Human acceptance remains the default.
 

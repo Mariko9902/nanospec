@@ -361,7 +361,7 @@ Acceptance names the observable facts that must hold when the Story is complete.
 
 Start with the required `### Acceptance Flow` Mermaid diagram. It should identify preparation, roles and data, prerequisites, the actual entry, main and defined important non-success actions, what to observe, which ID each step covers, evidence to retain, and the next step after a pass or failure.
 
-For a provider without its own page, identify the delivered call example, result, or persisted data that provides an actual observation entry. Do not invent an entry or command that does not exist.
+For a provider without its own page, identify the delivered call example or other executable entry before the flow. Describe how to invoke it, what result to observe, and, when data is saved, how to verify the persisted result. Do not invent an entry or command that does not exist.
 
 Flow nodes must contain concrete operations and observations. Comments, style declarations, and subgraph titles do not count as coverage. Mark the covered Acceptance IDs in the nodes and cover every item. Do not add rules, prescribe internals, or prefill observations that have not happened.
 
