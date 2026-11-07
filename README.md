@@ -127,7 +127,7 @@ Investigate questions that can be answered from the requirements and project
 code. Clearly list questions that require my decision and wait for an answer.
 Do not substitute assumptions for required confirmation.
 
-Do not draft specs until the required clarifications have been resolved.
+Do not write specs until the required clarifications have been resolved.
 If no clarification is needed, explicitly state that and proceed.
 
 Plan the entire current phase in one pass. Account for the complete business
