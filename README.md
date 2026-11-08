@@ -97,7 +97,7 @@ We need to plan the development specifications (specs) for the current phase.
 
 1. First, read the requirements:
    - Full project requirements: ./docs/develop/*
-   - Current phase requirements: ./ai-issue-doc/prd/<package-file>.md
+   - Current phase requirements: ./docs/prd/<package-file>.md
 2. Analyze the current code in depth. Thoroughly understand the repository
    structure, key business design, existing behavior, and relevant public
    contracts.
@@ -108,6 +108,7 @@ We need to plan the development specifications (specs) for the current phase.
 
 All spec writing, checking, and corrections must strictly follow the NanoSpec
 system.
+Write the specs in English and save them under ./spec/.
 
 Before writing any specs, thoroughly analyze the requirements and the current
 state of the project. Most importantly, clearly identify:
@@ -131,7 +132,7 @@ Once the phase is planned, I select a Story explicitly. Replace `<cycle-dir>` an
 ```text
 First, read:
 - Project development documentation: ./docs/develop/*
-- Current phase requirements: ./ai-issue-doc/prd/<package-file>.md
+- Current phase requirements: ./docs/prd/<package-file>.md
 - <cycle-dir>/cycle.md
 - <cycle-dir>/execution-state.md
 
