@@ -95,45 +95,33 @@ I give the agent both the full requirements and the current phase's requirements
 ```text
 We need to plan the development specifications (specs) for the current phase.
 
-Configuration:
-- Spec language: en-US
-- Rule sources: [] (replace with actual rule-pool paths if applicable)
-- Spec directory: ./spec/cycle-01-orders/
+1. First, read the requirements:
+   - Full project requirements: ./docs/develop/*
+   - Current phase requirements: ./ai-issue-doc/prd/<package-file>.md
+2. Analyze the current code in depth. Thoroughly understand the repository
+   structure, key business design, existing behavior, and relevant public
+   contracts.
+3. Read ~/coding/nanospec/SKILL.md and understand its instructions and how to
+   use the system.
+4. Prepare a complete set of specs for this phase based on confirmed decisions
+   from our discussion, the original requirements, and verified project facts.
 
-First:
-1. Read the requirements:
-   - Full project requirements: <path or URL>
-   - Current phase requirements: <path or URL>
-2. Analyze the current code in depth. Understand the repository structure,
-   key business design, existing behavior, and relevant public contracts.
-3. Read ./nanospec/SKILL.md and the rules and templates it selects for
-   writing specs.
-
-Prepare a complete set of specs for this phase based on confirmed decisions
-from our discussion, the original requirements, and verified project facts.
-All writing, checking, and corrections must strictly follow the NanoSpec system.
+All spec writing, checking, and corrections must strictly follow the NanoSpec
+system.
 
 Before writing any specs, thoroughly analyze the requirements and the current
 state of the project. Most importantly, clearly identify:
-- The goal of this phase and the gap between the current implementation
-  and that goal.
-- Any ambiguity, unclear expectations, and critical assumptions made.
+- Any ambiguity or unclear expectations, and the key assumptions you have
+  made about them.
 - Hidden requirements and potential risks.
-- Questions or decisions that require my input to align the requirements.
-- Whether NanoSpec adequately supports writing the specs for this phase,
-  and any gaps that affect planning.
+- Questions that must be clarified to align the requirements.
 
-Investigate questions that can be answered from the requirements and project
-code. Clearly list questions that require my decision and wait for an answer.
-Do not substitute assumptions for required confirmation.
+Do not write specs until these questions have been answered. Investigate
+questions that can be answered from the requirements and project code first.
 
-Do not write specs until the required clarifications have been resolved.
-If no clarification is needed, explicitly state that and proceed.
-
-Plan the entire current phase in one pass. Account for the complete business
-flow, constraints, actual dependencies, and important exceptions needed to
-achieve the goal. Complete the decomposition, checks, corrections, and review
-required by NanoSpec.
+Since the entire phase must be planned in one pass, account for the complete
+business flow, constraints, actual dependencies, important exceptions, and
+other details needed to achieve the goal.
 ```
 
 ### Execute one Story
@@ -141,11 +129,13 @@ required by NanoSpec.
 Once the phase is planned, I select a Story explicitly. Replace `<cycle-dir>` and `<story-dir>` below with the actual Cycle and Story directories.
 
 ```text
-Read:
+First, read:
 - Project development documentation: ./docs/develop/*
-- Current phase requirements: <package-NN-*.md>
+- Current phase requirements: ./ai-issue-doc/prd/<package-file>.md
 - <cycle-dir>/cycle.md
 - <cycle-dir>/execution-state.md
+
+Then read the Story selected for this implementation:
 - <cycle-dir>/<story-dir>/story.md
 
 The goal is to implement the specified Story:
@@ -165,8 +155,8 @@ The goal is to implement the specified Story:
 - Follow AGENTS.md and NanoSpec's Execute rules throughout the work.
 - Keep execution state current through NanoSpec's lifecycle commands:
   checkpoint, evidence, verify, accept, and reject. Follow the declared
-  acceptance policy. The execution protocol comes from the prepared package;
-  execution-state.md records the current facts.
+  acceptance policy. The execution protocol comes from the package generated
+  by prepare; execution-state.md records the current facts.
 - If implementation or verification encounters a blocker outside this Story's
   scope, stop and explain it in plain, concise language. Examples include
   network failures, unusable login accounts, unreachable APIs, API errors,
