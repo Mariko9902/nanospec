@@ -2,7 +2,6 @@ package validator
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"regexp"
 	"strconv"
@@ -12,26 +11,6 @@ import (
 	"nanospec/internal/diagnostic"
 	"nanospec/internal/specdoc"
 )
-
-// CheckpointRequest describes the current execution and recovery facts.
-type CheckpointRequest struct {
-	Owner     string
-	Status    string
-	Next      string
-	Situation string
-	Issue     string
-	At        time.Time
-}
-
-// CheckpointResult holds a proposed checkpoint change.
-type CheckpointResult struct {
-	CycleID      string
-	StoryID      string
-	LaneID       string
-	Status       string
-	SpecRevision string
-	Update       ViewUpdate
-}
 
 // RevisionRequest describes a semantic change already made to the specification.
 type RevisionRequest struct {
@@ -49,105 +28,6 @@ type RevisionResult struct {
 }
 
 var laneNumberPattern = regexp.MustCompile(`^lane-(\d{2})(?:-|$)`)
-
-// BuildCheckpointUpdate builds and validates a checkpoint without saving it.
-func BuildCheckpointUpdate(target string, request CheckpointRequest) (CheckpointResult, ValidationResult) {
-	if inputError := validateCheckpointRequest(request); inputError != "" {
-		return CheckpointResult{}, ValidationResult{InputError: inputError}
-	}
-	storyDirectory, inputError := resolveStoryDirectory(target)
-	if inputError != "" {
-		return CheckpointResult{}, ValidationResult{InputError: inputError}
-	}
-	snapshot, result := LoadCycleSnapshot(filepath.Dir(storyDirectory))
-	if result.InputError != "" || len(result.Errors) > 0 {
-		return CheckpointResult{}, result
-	}
-	storyID := filepath.Base(storyDirectory)
-	story, found := snapshot.Stories[storyID]
-	if !found {
-		return CheckpointResult{}, ValidationResult{InputError: "Story is not part of the Cycle: " + storyID}
-	}
-	acceptance := acceptanceState(storyID, snapshot.Acceptance)
-	if acceptance == "ready" || acceptance == "accepted" {
-		return CheckpointResult{}, ValidationResult{InputError: "cannot checkpoint a Story with Acceptance state " + acceptance}
-	}
-	if request.Status != "blocked" {
-		if inputError := validateExecutionGate(story, snapshot); inputError != "" {
-			return CheckpointResult{}, ValidationResult{InputError: inputError}
-		}
-	}
-
-	lanes := cloneFieldBlocks(snapshot.ActiveLanes)
-	laneIndex := -1
-	for index, lane := range lanes {
-		if lane.Fields["Story"] == storyID {
-			if laneIndex >= 0 {
-				return CheckpointResult{}, ValidationResult{InputError: "Story has more than one active Lane: " + storyID}
-			}
-			laneIndex = index
-		}
-	}
-	if laneIndex < 0 {
-		lanes = append(lanes, FieldBlock{ID: nextLaneID(lanes), Fields: map[string]string{"Story": storyID, "Spec Changes": "0"}})
-		laneIndex = len(lanes) - 1
-	}
-	lane := &lanes[laneIndex]
-	if owner := lane.Fields["Owner"]; owner != "" && owner != request.Owner && fileExists(filepath.Join(storyDirectory, "acceptance", "evidence.md")) {
-		return CheckpointResult{}, ValidationResult{InputError: "cannot change Owner after evidence is recorded; continue with Owner " + owner}
-	}
-	lane.Fields["Owner"] = request.Owner
-	lane.Fields["Status"] = request.Status
-	lane.Fields["Next"] = request.Next
-	if lane.Fields["Spec Changes"] == "" {
-		lane.Fields["Spec Changes"] = "0"
-	}
-
-	updated, err := specdoc.ParseMarkdown(snapshot.StateText).ReplaceSection(2, "Active Lanes", renderLanes(lanes))
-	if err != nil {
-		return CheckpointResult{}, ValidationResult{InputError: err.Error()}
-	}
-	updated, err = updateManagedStateLine(updated, "Current Situation", storyID, request.Situation)
-	if err != nil {
-		return CheckpointResult{}, ValidationResult{InputError: err.Error()}
-	}
-	updated, err = updateManagedStateLine(updated, "Open Issues", storyID, request.Issue)
-	if err != nil {
-		return CheckpointResult{}, ValidationResult{InputError: err.Error()}
-	}
-	updated, err = replaceFrontmatterScalar(updated, "last_updated_at", request.At.Format(time.RFC3339))
-	if err != nil {
-		return CheckpointResult{}, ValidationResult{InputError: err.Error()}
-	}
-	stateFile := filepath.Join(snapshot.Directory, "execution-state.md")
-	if validation := validateUpdatedState(stateFile, snapshot, updated); validation.InputError != "" || len(validation.Errors) > 0 {
-		return CheckpointResult{}, validation
-	}
-	return CheckpointResult{
-		CycleID:      snapshot.ID,
-		StoryID:      storyID,
-		LaneID:       lane.ID,
-		Status:       request.Status,
-		SpecRevision: snapshot.SpecRevision,
-		Update:       ViewUpdate{File: stateFile, Before: snapshot.StateText, After: updated},
-	}, ValidationResult{}
-}
-
-func validateExecutionGate(story Story, snapshot CycleSnapshot) string {
-	storySource, err := os.ReadFile(story.File)
-	if err != nil {
-		return "cannot read story.md: " + err.Error()
-	}
-	if hasOpenQuestions(string(storySource)) {
-		return "cannot start or continue a Story with open questions: " + story.ID
-	}
-	for _, dependency := range dependencyStatuses(story, snapshot.Acceptance) {
-		if dependency.Acceptance != "ready" && dependency.Acceptance != "accepted" {
-			return "cannot start or continue before dependency is ready: " + dependency.StoryID
-		}
-	}
-	return ""
-}
 
 // BuildRevisionUpdate updates revision facts after the edited specification passes validation.
 func BuildRevisionUpdate(targets []string, request RevisionRequest) (RevisionResult, ValidationResult) {
@@ -208,16 +88,44 @@ func BuildRevisionUpdate(targets []string, request RevisionRequest) (RevisionRes
 		if _, affected := seen[lanes[index].Fields["Story"]]; !affected {
 			continue
 		}
+		stage := lanes[index].Fields["Status"]
+		if stage == "blocked" {
+			stage = lanes[index].Fields["Resume Status"]
+		}
+		if stage == "pending" {
+			continue
+		}
 		count, _ := strconv.Atoi(lanes[index].Fields["Spec Changes"])
 		lanes[index].Fields["Spec Changes"] = strconv.Itoa(count + 1)
+		lane := &lanes[index]
+		lane.Fields["Implementation Complete"] = "false"
+		if lane.Fields["Status"] == "blocked" {
+			if lane.Fields["Resume Status"] == "ready" {
+				lane.Fields["Resume Status"] = "active"
+			}
+		} else if lane.Fields["Status"] == "rejected" {
+			lane.Fields["Next"] = "Await rework assignment at " + newRevision
+		} else {
+			resume := lane.Fields["Status"]
+			if resume == "ready" {
+				resume = "active"
+			}
+			lane.Fields["Resume Status"] = resume
+			lane.Fields["Status"] = "blocked"
+			lane.Fields["Next"] = "Reassess specification at " + newRevision + "; " + request.Reason
+		}
 	}
 
-	updated, err := specdoc.ParseMarkdown(snapshot.StateText).ReplaceSection(2, "Active Lanes", renderLanes(lanes))
+	updated, err := specdoc.ParseMarkdown(snapshot.CycleText).ReplaceSection(2, "Active Lanes", renderLanes(lanes))
 	if err != nil {
 		return RevisionResult{}, ValidationResult{InputError: err.Error()}
 	}
 	for _, storyID := range storyIDs {
-		updated, err = updateAcceptanceState(updated, storyID, "pending: specification revised at "+newRevision+"; "+request.Reason)
+		stateValue := "pending: specification revised at " + newRevision + "; " + request.Reason
+		if lane, found := storyLane(storyID, lanes); found && (lane.Fields["Status"] == "rejected" || lane.Fields["Resume Status"] == "rejected") {
+			stateValue = "rejected: specification revised at " + newRevision + "; await rework assignment"
+		}
+		updated, err = updateAcceptanceState(updated, storyID, stateValue)
 		if err != nil {
 			return RevisionResult{}, ValidationResult{InputError: err.Error()}
 		}
@@ -226,19 +134,21 @@ func BuildRevisionUpdate(targets []string, request RevisionRequest) (RevisionRes
 			return RevisionResult{}, ValidationResult{InputError: err.Error()}
 		}
 	}
-	updated, err = replaceFrontmatterScalar(updated, "spec_rev", newRevision)
+	updated, err = specdoc.ReplaceFrontmatterScalar(updated, "spec_rev", newRevision)
 	if err != nil {
 		return RevisionResult{}, ValidationResult{InputError: err.Error()}
 	}
-	updated, err = replaceFrontmatterScalar(updated, "last_updated_at", request.At.Format(time.RFC3339))
+	updated, err = specdoc.ReplaceFrontmatterScalar(updated, "last_updated_at", request.At.Format(time.RFC3339))
 	if err != nil {
 		return RevisionResult{}, ValidationResult{InputError: err.Error()}
 	}
-	stateFile := filepath.Join(snapshot.Directory, "execution-state.md")
-	if validation := validateUpdatedState(stateFile, snapshot, updated); validation.InputError != "" || len(validation.Errors) > 0 {
+	stateFile := filepath.Join(snapshot.Directory, "cycle.md")
+	var validation ValidationResult
+	updated, validation = canonicalizeCycleState(stateFile, snapshot.ID, snapshot.Stories, updated)
+	if validation.InputError != "" || len(validation.Errors) > 0 {
 		return RevisionResult{}, validation
 	}
-	stateBefore := snapshot.StateText
+	stateBefore := snapshot.CycleText
 	updates := make([]ViewUpdate, 0, len(result.Updates)+1)
 	for _, viewUpdate := range result.Updates {
 		if viewUpdate.File == stateFile {
@@ -301,32 +211,6 @@ func BuildRevisionUpdate(targets []string, request RevisionRequest) (RevisionRes
 	}, ValidationResult{}
 }
 
-func validateCheckpointRequest(request CheckpointRequest) string {
-	if !executorIDPattern.MatchString(request.Owner) {
-		return "owner must be a stable identifier"
-	}
-	if !singleLineText(request.Owner) || !singleLineText(request.Next) || !singleLineText(request.Situation) {
-		return "owner, next and situation must each be one non-empty line"
-	}
-	statuses := map[string]struct{}{"active": {}, "paused": {}, "blocked": {}, "done": {}}
-	if _, found := statuses[request.Status]; !found {
-		return "checkpoint status must be active, paused, blocked or done"
-	}
-	if request.Status == "blocked" && !singleLineText(request.Issue) {
-		return "blocked checkpoint requires one issue line"
-	}
-	if request.Issue != "" && !singleLineText(request.Issue) {
-		return "checkpoint issue must be one line"
-	}
-	if request.Status == "done" && request.Next != "none" {
-		return "done checkpoint requires next=none"
-	}
-	if request.At.IsZero() {
-		return "checkpoint timestamp is required"
-	}
-	return ""
-}
-
 func singleLineText(value string) bool {
 	return strings.TrimSpace(value) != "" && !strings.ContainsAny(value, "\r\n")
 }
@@ -370,6 +254,10 @@ func renderLanes(lanes []FieldBlock) string {
 			"  - Owner: " + lane.Fields["Owner"],
 			"  - Status: " + lane.Fields["Status"],
 			"  - Next: " + lane.Fields["Next"],
+			"  - Implementation Complete: " + lane.Fields["Implementation Complete"],
+		}
+		if lane.Fields["Resume Status"] != "" {
+			lines = append(lines, "  - Resume Status: "+lane.Fields["Resume Status"])
 		}
 		if lane.Fields["Spec Changes"] != "" {
 			lines = append(lines, "  - Spec Changes: "+lane.Fields["Spec Changes"])
@@ -434,16 +322,25 @@ func updateAcceptanceState(source, storyID, value string) (string, error) {
 	return markdown.ReplaceSection(2, "Acceptance Status", strings.Join(lines, "\n"))
 }
 
-func replaceFrontmatterScalar(source, key, value string) (string, error) {
-	pattern := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(key) + `:[^\r\n]*$`)
-	if len(pattern.FindAllStringIndex(source, -1)) != 1 {
-		return "", fmt.Errorf("frontmatter must contain exactly one %s field", key)
+func setStoryLane(lanes []FieldBlock, storyID, status, next string, complete bool) []FieldBlock {
+	updated := cloneFieldBlocks(lanes)
+	for index := range updated {
+		if updated[index].Fields["Story"] == storyID {
+			updated[index].Fields["Status"] = status
+			updated[index].Fields["Next"] = next
+			updated[index].Fields["Implementation Complete"] = strconv.FormatBool(complete)
+			delete(updated[index].Fields, "Resume Status")
+		}
 	}
-	return pattern.ReplaceAllString(source, key+": "+value), nil
+	return updated
 }
 
-func validateUpdatedState(file string, snapshot CycleSnapshot, source string) ValidationResult {
+func canonicalizeCycleState(file, cycleID string, stories map[string]Story, source string) (string, ValidationResult) {
+	updated, err := RenderCycleViews(source, stories)
+	if err != nil {
+		return "", ValidationResult{InputError: err.Error()}
+	}
 	var report diagnostic.Report
-	validateExecutionState(file, snapshot.ID, snapshot.Stories, source, &report)
-	return ValidationResult{Errors: report.Errors(), Warnings: report.Warnings()}
+	validateCycleFile(file, cycleID, stories, updated, &report)
+	return updated, ValidationResult{Errors: report.Errors(), Warnings: report.Warnings()}
 }

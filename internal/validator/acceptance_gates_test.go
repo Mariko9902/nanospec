@@ -17,25 +17,25 @@ func TestRejectedDependencyBlocksVerificationAndAcceptance(t *testing.T) {
 	for _, id := range []string{"story-01-order", "story-02-payment"} {
 		prepareReadyStory(t, filepath.Join(directory, id), at)
 	}
-	_, result := RejectStory(filepath.Join(directory, "story-01-order"), RejectionRequest{
+	_, result := RejectStory(filepath.Join(directory, "story-01-order"), RejectionRequest{SpecRevision: "rev-1",
 		RejectedBy: "owner", Reason: "stored order is incorrect", At: at.Add(4 * time.Minute),
 	})
 	if result.InputError != "" || len(result.Errors) != 0 {
 		t.Fatalf("rejection result = %#v", result)
 	}
 	target := filepath.Join(directory, "story-02-payment")
-	before := readTestFile(t, filepath.Join(directory, "execution-state.md"))
-	_, result = VerifyStory(target, VerificationRequest{
+	before := readTestFile(t, filepath.Join(directory, "cycle.md"))
+	_, result = VerifyStory(target, VerificationRequest{SpecRevision: "rev-1",
 		VerifiedBy: "executor-a", Mode: VerificationSelf, Result: "pass", At: at.Add(5 * time.Minute),
 	})
 	if !strings.Contains(result.InputError, "dependency is ready: story-01-order") {
 		t.Fatalf("verification result = %#v", result)
 	}
-	_, result = AcceptStory(target, AcceptanceRequest{AcceptedBy: "owner", Method: AcceptanceHuman, At: at.Add(6 * time.Minute)})
+	_, result = AcceptStory(target, AcceptanceRequest{SpecRevision: "rev-1", AcceptedBy: "owner", Method: AcceptanceHuman, At: at.Add(6 * time.Minute)})
 	if !strings.Contains(result.InputError, "dependency is ready: story-01-order") {
 		t.Fatalf("acceptance result = %#v", result)
 	}
-	if readTestFile(t, filepath.Join(directory, "execution-state.md")) != before || fileExists(filepath.Join(target, "acceptance", "outcome.md")) {
+	if readTestFile(t, filepath.Join(directory, "cycle.md")) != before || fileExists(filepath.Join(target, "acceptance", "outcome.md")) {
 		t.Fatal("blocked acceptance changed the delivery state")
 	}
 }
@@ -49,7 +49,7 @@ func TestReadyDependencyAllowsAcceptance(t *testing.T) {
 	for _, id := range []string{"story-01-order", "story-02-payment"} {
 		prepareReadyStory(t, filepath.Join(directory, id), at)
 	}
-	_, result := AcceptStory(filepath.Join(directory, "story-02-payment"), AcceptanceRequest{
+	_, result := AcceptStory(filepath.Join(directory, "story-02-payment"), AcceptanceRequest{SpecRevision: "rev-1",
 		AcceptedBy: "owner", Method: AcceptanceHuman, At: at.Add(4 * time.Minute),
 	})
 	if result.InputError != "" || len(result.Errors) != 0 {
@@ -65,13 +65,13 @@ func TestAcceptanceRejectsStoryChangedBeforeSave(t *testing.T) {
 	target := filepath.Join(directory, "story-01-order")
 	at := time.Date(2026, 10, 31, 12, 0, 0, 0, time.UTC)
 	prepareReadyStory(t, target, at)
-	commit, result := BuildAcceptanceCommit(target, AcceptanceRequest{
+	commit, result := BuildAcceptanceCommit(target, AcceptanceRequest{SpecRevision: "rev-1",
 		AcceptedBy: "owner", Method: AcceptanceHuman, At: at.Add(4 * time.Minute),
 	})
 	if result.InputError != "" || len(result.Errors) != 0 {
 		t.Fatalf("acceptance result = %#v", result)
 	}
-	stateFile := filepath.Join(directory, "execution-state.md")
+	stateFile := filepath.Join(directory, "cycle.md")
 	beforeState := readTestFile(t, stateFile)
 	storyFile := filepath.Join(target, "story.md")
 	writeFixtureFile(t, storyFile, readTestFile(t, storyFile)+"\n")
@@ -94,7 +94,7 @@ func prepareReadyStory(t *testing.T, target string, at time.Time) {
 	checkpointStoryDone(t, target, at)
 	captureAcceptance(t, target, "A1", at.Add(time.Minute))
 	captureAcceptance(t, target, "A2", at.Add(2*time.Minute))
-	_, result := VerifyStory(target, VerificationRequest{
+	_, result := VerifyStory(target, VerificationRequest{SpecRevision: "rev-1",
 		VerifiedBy: "executor-a", Mode: VerificationSelf, Result: "pass", At: at.Add(3 * time.Minute),
 	})
 	if result.InputError != "" || len(result.Errors) != 0 {

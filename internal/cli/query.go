@@ -10,7 +10,7 @@ import (
 	"nanospec/internal/validator"
 )
 
-const showHelp = "Usage: nanospec show <overview|waves|graph|tree> [cycle-dir]\n\n" +
+const showHelp = "Usage: nanospec show <overview|graph> [cycle-dir]\n\n" +
 	"Show one Cycle view without changing files. The Cycle directory\n" +
 	"defaults to the current directory."
 
@@ -79,7 +79,7 @@ func runReady(args []string, stdout, stderr io.Writer) int {
 			}
 			dependencies = strings.Join(items, ", ")
 		}
-		fmt.Fprintf(stdout, "- %s | Wave %d | acceptance=%s | dependencies=%s\n", candidate.StoryID, candidate.Wave, candidate.Acceptance, dependencies)
+		fmt.Fprintf(stdout, "- %s | acceptance=%s | dependencies=%s\n", candidate.StoryID, candidate.Acceptance, dependencies)
 	}
 	fmt.Fprintln(stdout, "Before execution, confirm evidence applicability, current-environment availability, and any required human acceptance.")
 	fmt.Fprintln(stdout, "This command does not select work, change state, or start execution.")
@@ -145,7 +145,7 @@ func runPrepare(args []string, stdout, stderr io.Writer, executionRules string) 
 		renderPreparation(stdout, packages)
 	}
 	for _, item := range packages {
-		if item.Gate == "blocked_by_dependency" || item.Gate == "blocked_by_open_questions" || item.Gate == "awaiting_acceptance" || item.Gate == "accepted" {
+		if item.Gate == "blocked" || item.Gate == "blocked_by_dependency" || item.Gate == "blocked_by_open_questions" || item.Gate == "awaiting_acceptance" || item.Gate == "accepted" {
 			return 1
 		}
 	}
@@ -161,6 +161,7 @@ func renderPreparation(output io.Writer, packages []validator.ExecutionPackage) 
 		fmt.Fprintln(output)
 		fmt.Fprintf(output, "## %s/%s\n\n", item.CycleID, item.StoryID)
 		fmt.Fprintf(output, "- Spec Revision: %s\n", item.SpecRevision)
+		fmt.Fprintf(output, "- Status: %s\n", item.Status)
 		fmt.Fprintf(output, "- Acceptance: %s\n", item.Acceptance)
 		fmt.Fprintf(output, "- Gate: %s\n", item.Gate)
 		fmt.Fprintln(output, "- Required Confirmations:")
@@ -192,7 +193,7 @@ func reportQueryResult(result validator.ValidationResult, stderr io.Writer) int 
 }
 
 func supportedView(name string) bool {
-	return name == "overview" || name == "waves" || name == "graph" || name == "tree"
+	return name == "overview" || name == "graph"
 }
 
 func hasHelp(args []string) bool {

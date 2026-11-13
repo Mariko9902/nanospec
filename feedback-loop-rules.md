@@ -73,7 +73,7 @@ Project-specific constraints, missing context in one request, an agent ignoring 
 
 - Concept confusion: update the concept model and related rules or templates.
 - Bad delivery boundaries: update decomposition guidance and the review checklist.
-- Missing execution or recovery input: update execution rules or the state template.
+- Missing execution or recovery input: update execution rules or the Cycle execution fields.
 - A misleading template: fix the template and check the validator.
 - A stable mechanical inconsistency: fix the validator and add a regression check.
 - A single instance mistake: fix the instance.

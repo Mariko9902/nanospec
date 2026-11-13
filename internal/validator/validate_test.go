@@ -43,5 +43,4 @@ func TestValidateSpecReportsMissingCycleFiles(t *testing.T) {
 		t.Fatalf("InputError = %q", result.InputError)
 	}
 	assertIssueContains(t, result.Errors, "missing cycle.md")
-	assertIssueContains(t, result.Errors, "missing execution-state.md")
 }

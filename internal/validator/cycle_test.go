@@ -1,7 +1,6 @@
 package validator
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -19,9 +18,6 @@ func TestValidateSpecSynchronizesAndRechecksCycleViews(t *testing.T) {
 	baseFile := filepath.Join(cycleDirectory, "story-01-base", "story.md")
 	base := strings.Replace(readTestFile(t, baseFile), "- Title: Save an order", "- Title: Base capability", 1)
 	writeFixtureFile(t, baseFile, base)
-	cycleFile := filepath.Join(cycleDirectory, "cycle.md")
-	cycle := strings.Replace(readTestFile(t, cycleFile), "`story-01-base`: Save an order", "`story-01-base`: Old title；Start first", 1)
-	writeFixtureFile(t, cycleFile, cycle)
 
 	result := ValidateSpec(cycleDirectory, true)
 	if len(result.Errors) != 0 {
@@ -39,13 +35,10 @@ func TestValidateSpecSynchronizesAndRechecksCycleViews(t *testing.T) {
 		t.Fatal(err)
 	}
 	content := string(cycleText)
-	if !strings.Contains(content, "#### Wave 2") {
-		t.Fatalf("cycle does not contain Wave 2:\n%s", content)
-	}
 	if !strings.Contains(content, "S01 --> S02") {
 		t.Fatalf("cycle does not contain dependency edge:\n%s", content)
 	}
-	if !strings.Contains(content, "`story-01-base`: Base capability; Start first") || !strings.Contains(content, `S01["S01 Base capability"]`) {
+	if !strings.Contains(content, `S01["[pending] S01 Base capability"]`) {
 		t.Fatalf("cycle does not use Story Title as the generated name:\n%s", content)
 	}
 
@@ -90,9 +83,8 @@ func TestValidateSpecWarnsAboutTransitiveDependency(t *testing.T) {
 
 func TestValidateSpecChecksAcceptedStateAgainstOutcome(t *testing.T) {
 	cycleDirectory := writeCycleFixture(t, map[string][]string{"story-01-base": {}})
-	stateFile := filepath.Join(cycleDirectory, "execution-state.md")
+	stateFile := filepath.Join(cycleDirectory, "cycle.md")
 	state := readTestFile(t, stateFile)
-	state = strings.Replace(state, "- [ ] story-01-base", "- [x] story-01-base", 1)
 	state = strings.Replace(state, "Acceptance: pending: not observed", "Acceptance: accepted: confirmed", 1)
 	writeFixtureFile(t, stateFile, state)
 
@@ -102,18 +94,11 @@ func TestValidateSpecChecksAcceptedStateAgainstOutcome(t *testing.T) {
 }
 
 func TestValidateSpecRejectsUnsupportedProtocolSections(t *testing.T) {
-	cycleDirectory := writeCycleFixture(t, map[string][]string{"story-01-base": {}})
-	cycleFile := filepath.Join(cycleDirectory, "cycle.md")
-	stateFile := filepath.Join(cycleDirectory, "execution-state.md")
-	cycle := strings.Replace(readTestFile(t, cycleFile), "## Story Plan", "## Extra Section\n\n- Undefined content.\n\n## Story Plan", 1)
-	state := strings.Replace(readTestFile(t, stateFile), "## Progress Tree", "## Extra Section\n\n- Undefined content.\n\n## Progress Tree", 1)
-	writeFixtureFile(t, cycleFile, cycle)
-	writeFixtureFile(t, stateFile, state)
-
-	result := ValidateSpec(cycleDirectory, true)
-
+	dir := writeCycleFixture(t, map[string][]string{"story-01-base": {}})
+	file := filepath.Join(dir, "cycle.md")
+	writeFixtureFile(t, file, strings.Replace(readTestFile(t, file), "## Dependency Graph", "## Extra Section\n\n- Undefined content.\n\n## Dependency Graph", 1))
+	result := ValidateSpec(dir, true)
 	assertDiagnostic(t, result.Errors, "Cycle has unsupported section: Extra Section")
-	assertDiagnostic(t, result.Errors, "Execution State has unsupported section: Extra Section")
 }
 
 func TestSaveViewUpdatesRejectsChangedSource(t *testing.T) {
@@ -173,49 +158,20 @@ func writeCycleFixture(t *testing.T, dependencies map[string][]string) string {
 		writeFixtureFile(t, filepath.Join(directory, "story.md"), document)
 	}
 	writeFixtureFile(t, filepath.Join(cycleDirectory, "cycle.md"), testCycleDocument(ids))
-	writeFixtureFile(t, filepath.Join(cycleDirectory, "execution-state.md"), testStateDocument(ids))
 	return cycleDirectory
 }
 
 func testCycleDocument(ids []string) string {
-	quote := string(rune(96))
-	entries := make([]string, 0, len(ids))
-	for index, id := range ids {
-		entries = append(entries, fmt.Sprintf("%d. %s%s%s: Save an order", index+1, quote, id, quote))
-	}
-	return "---\n" +
-		"id: " + fixtureCycleID + "\n" +
-		"window:\n" +
-		"  - current\n" +
-		"---\n\n" +
-		"## Planning Context\n\n- Current delivery scope.\n\n" +
-		"## Story Plan\n\n" +
-		"### Dependency Waves\n\n" +
-		"#### Wave 1\n\n" +
-		strings.Join(entries, "\n") + "\n\n" +
-		"### Dependency Graph\n\n- none\n\n" +
-		"## Risks\n\n- none\n"
-}
-
-func testStateDocument(ids []string) string {
-	progress := make([]string, 0, len(ids))
 	statuses := make([]string, 0, len(ids))
 	for _, id := range ids {
-		progress = append(progress, "- [ ] "+id)
 		statuses = append(statuses, "- Story: "+id+"\n  - Acceptance: pending: not observed")
 	}
-	return "---\n" +
-		"cycle: " + fixtureCycleID + "\n" +
-		"spec_rev: rev-1\n" +
-		"status: active\n" +
-		"last_updated_at: 2026-09-10T10:00:00+08:00\n" +
-		"---\n\n" +
-		"## Progress Tree\n\n" + strings.Join(progress, "\n") + "\n\n" +
-		"## Current Situation\n\n- none\n\n" +
-		"## Active Lanes\n\n- none\n\n" +
+	return "---\nid: " + fixtureCycleID + "\nwindow:\n  - current\nspec_rev: rev-1\nstatus: active\nlast_updated_at: 2026-09-10T10:00:00+08:00\n---\n\n" +
+		"## Planning Context\n\n- Current delivery scope.\n\n" +
+		"## Dependency Graph\n\n- none\n\n## Risks\n\n- none\n\n" +
+		"## Current Situation\n\n- none\n\n## Active Lanes\n\n- none\n\n" +
 		"## Acceptance Status\n\n" + strings.Join(statuses, "\n") + "\n\n" +
-		"## Open Issues\n\n- none\n\n" +
-		"## Practice Feedback\n\n- none\n"
+		"## Open Issues\n\n- none\n\n## Practice Feedback\n\n- none\n"
 }
 
 func readTestFile(t *testing.T, file string) string {

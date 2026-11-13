@@ -33,19 +33,6 @@ type Story struct {
 	HasOutcome          bool
 }
 
-// WaveEntry keeps a Story and its coordination notes together.
-type WaveEntry struct {
-	ID    string
-	Tail  string
-	Notes []string
-}
-
-// DependencyWave groups Stories with the same dependency depth.
-type DependencyWave struct {
-	Number  int
-	Entries []WaveEntry
-}
-
 // FieldBlock is a named entry in the execution state.
 type FieldBlock struct {
 	ID     string
@@ -74,23 +61,21 @@ type CycleSnapshot struct {
 	SpecRevision string
 	SpecLanguage string
 	CycleText    string
-	StateText    string
 	Stories      map[string]Story
-	Waves        []DependencyWave
 	Acceptance   []FieldBlock
 	ActiveLanes  []FieldBlock
 }
 
 // DependencyStatus records a prerequisite and its acceptance state.
 type DependencyStatus struct {
-	StoryID    string `json:"story"`
-	Acceptance string `json:"acceptance"`
+	StoryID    string      `json:"story"`
+	Acceptance string      `json:"acceptance"`
+	Status     StoryStatus `json:"status"`
 }
 
 // ReadyCandidate is a Story whose recorded dependencies allow further checks.
 type ReadyCandidate struct {
 	StoryID      string
-	Wave         int
 	Acceptance   string
 	Dependencies []DependencyStatus
 }
@@ -102,6 +87,8 @@ type ExecutionPackage struct {
 	SpecRevision          string             `json:"spec_revision"`
 	SpecLanguage          string             `json:"spec_language"`
 	Acceptance            string             `json:"acceptance"`
+	Status                StoryStatus        `json:"status"`
+	ResumeStatus          *StoryStatus       `json:"resume_status"`
 	Gate                  string             `json:"gate"`
 	Dependencies          []DependencyStatus `json:"dependencies"`
 	OpenQuestions         bool               `json:"open_questions"`

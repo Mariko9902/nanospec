@@ -60,7 +60,7 @@ func TestExecutionPackagePreservesConcepts(t *testing.T) {
 	concepts := "### Concepts\n\n- **Reservation**: Set aside the stock needed for this order.\n\n"
 	document := strings.Replace(readTestFile(t, storyFile), "### Description", concepts+"### Description", 1)
 	writeFixtureFile(t, storyFile, document)
-	stateFile := filepath.Join(cycleDirectory, "execution-state.md")
+	stateFile := filepath.Join(cycleDirectory, "cycle.md")
 	stateBefore := readTestFile(t, stateFile)
 
 	prepared, result := BuildExecutionPackage(storyFile, "# Rules\n\nUse current facts.")

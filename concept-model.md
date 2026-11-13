@@ -44,18 +44,13 @@ A Cycle groups a set of Stories for planning and coordination. It records the wo
 
 Each Story keeps its own complete requirements. Check the actual code, data, and behavior when planning the Cycle. `depends_on` refers only to Stories in that Cycle. When using an existing feature, explain the confirmed behavior and connection in the current Story's Definition.
 
-`Story Plan` has two views:
+The Dependency Graph shows every Story, its current execution or acceptance state, and the dependency edges not already implied by another path. The CLI derives it from Story `depends_on`, Acceptance Status, and Active Lanes in `cycle.md`. Graph edits do not change those facts. Isolated Stories remain visible.
 
-- `Dependency Waves` groups Stories by dependency depth and records priority inside each group.
-- `Dependency Graph` shows a Mermaid DAG with the same reachability and no unnecessary edges.
-
-A Wave or list position is not a dependency. `depends_on` means that the current result cannot stand without a prerequisite's real result. Work without that dependency can still have a useful order based on the value it unlocks, the main path, risk, feedback, workload, and resource availability. A coordination note explains a non-obvious choice without creating a dependency.
+Planning Context records a useful priority or coordination constraint without creating a dependency. Graph position does not impose an execution batch. A Story can start when its own prerequisites are ready and available, subject to the caller's selection and project constraints.
 
 A prerequisite is ready when its result has been verified, its evidence still applies, and the result is available in the current environment. It need not already be accepted unless explicit human confirmation is required. See [dependency readiness](./execution-rules.md#dependency-readiness).
 
-Stories without prerequisites belong in Wave 1. Every other Story belongs one Wave after its longest prerequisite path. Stories in the same Wave have no dependency path between them, so parallel execution is possible. It is still an explicit execution choice. A Story waits for its own prerequisites, not for unrelated work in earlier Waves.
-
-`nanospec validate --sync-views` rebuilds Waves and the graph from `depends_on`, preserves order within each Wave, and builds the progress tree from acceptance states. Dependencies live in `depends_on`; acceptance facts live in Acceptance Status and the acceptance records. The generated views do not introduce decisions or evidence. Redundant direct dependencies produce a cleanup warning and are left out of the graph.
+`nanospec validate --sync-views` regenerates the graph from the current facts. Acceptance facts remain in Acceptance Status and the acceptance records. A generated graph supplies neither a decision nor evidence.
 
 Entirely unstarted Stories may be repartitioned without changing their combined acceptance meaning. A `Repartition Record` keeps the old and new IDs and a complete Acceptance mapping. It is a trace record, not a second requirements source. New, removed, or changed acceptance meaning follows the ordinary revision process.
 
@@ -102,11 +97,11 @@ A Story is not a prewritten implementation plan. Keep paths, functions, and inte
 
 Story identity uses `story-NN-<slug>`:
 
-- `NN` is a stable handle for reference, selection, coordination, and recovery. It does not encode a Wave, current priority, or dependency.
-- For a new Cycle, choose boundaries and dependencies first. Then assign numbers in the initial Wave order and order within each Wave.
+- `NN` is a stable handle for reference, selection, coordination, and recovery. It does not encode current priority or dependency.
+- For a new Cycle, choose boundaries and dependencies first. Then assign numbers in the initial dependency order.
 - Once implementation, verification, or acceptance facts exist, keep the identity. Ordering changes do not cause renumbering.
 - A meaning-preserving repartition of entirely unstarted work can retire old IDs and introduce new ones. Keep the mapping and never reuse a retired number.
-- `Dependency Waves` holds the preferred order. `depends_on` holds the blocking facts.
+- `Planning Context` holds priority and coordination notes. `depends_on` holds the blocking facts.
 
 A downstream Story explains how it uses existing results: data, a page, an entry point, an API, or a state. An upstream Story does not create empty placeholders for future work.
 
@@ -122,11 +117,11 @@ The Story owns requirements and hard constraints. The brief owns replaceable sit
 
 ### Execution State
 
-`execution-state.md` records the current Cycle revision, implementation and blocking facts, active execution slots, recovery actions, acceptance states, and method problems still worth tracking.
+`cycle.md` holds the current Cycle revision, implementation and blocking facts, active Lanes, recovery actions, acceptance states, and method problems still worth tracking, alongside its planning context. The graph summarizes those facts.
 
 Each Lane's `Owner` is the executor responsible for continuing its Story. It uses the same stable identifier format as `implemented_by`. Once evidence exists, a checkpoint cannot directly replace Owner or rewrite the implementation responsibility in that evidence.
 
-`spec_rev` tracks changes to formal execution meaning: scope, rules, priority within a Wave, dependencies, acceptance definitions, policy, and authority. Progress, evidence, and wording or layout changes that preserve meaning do not increment it. A brief correction does not increment it unless the Story's meaning also changes.
+`spec_rev` tracks changes to formal execution meaning: scope, rules, execution priority, dependencies, acceptance definitions, policy, and authority. Progress, evidence, and wording or layout changes that preserve meaning do not increment it. A brief correction does not increment it unless the Story's meaning also changes.
 
 ### Outcome
 
@@ -152,7 +147,7 @@ flowchart TD
   C --> S2["Story: definition and execution"]
   S1 -. optional .-> B1["Implementation Brief: repository findings"]
   S2 -. optional .-> B2["Implementation Brief: repository findings"]
-  C --> E["Execution State: current facts"]
+  C --> E["Execution State: current facts in cycle.md"]
   S1 --> O1["Outcome: accepted result"]
   S2 --> O2["Outcome: accepted result"]
 ```

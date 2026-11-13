@@ -128,7 +128,7 @@ Use the complete ID of the Cycle directory containing this Story.
 
 List only direct prerequisites whose actual results are required for this result to stand. Use full Story IDs.
 
-A preference, earlier number, recommended start order, or useful background does not establish a dependency. Put priority inside Dependency Waves. Waves show possible parallel work; the caller explicitly chooses whether to execute one or several Stories.
+A preference, earlier number, recommended start order, or useful background does not establish a dependency. Put priority in the Cycle Planning Context. Independent work may run in parallel; the caller explicitly chooses whether to execute one or several Stories.
 
 #### `regression_of`
 
@@ -169,7 +169,7 @@ A changed policy or authority scope is a formal decision and increments `spec_re
 
 Orientation gives a person a quick understanding. It contains only `Title` and `Scenario`, with values in the selected language.
 
-`Title` is the short, specific official name of the result. Waves, graph, and overview take their display title from it. Keep one title source.
+`Title` is the short, specific official name of the result. The graph and overview take their display title from it. Keep one title source.
 
 `Scenario` follows a representative event from its trigger through the system's contribution to a useful result. With a human participant, identify the role and entry. With a background process, identify the external input, scheduled event, or state change. The reader should understand what happens, what this Story provides, and how the result returns to the surrounding work.
 

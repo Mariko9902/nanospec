@@ -67,7 +67,7 @@ func TestCheckpointProcess(t *testing.T) {
 		}
 		time.Sleep(5 * time.Millisecond)
 	}
-	_, result := SaveStoryCheckpoint(target, CheckpointRequest{
+	_, result := SaveStoryCheckpoint(target, CheckpointRequest{SpecRevision: "rev-1",
 		Owner: "clerk", Status: "active", Next: "confirm the result", Situation: "record selected", At: time.Now(),
 	})
 	if result.InputError != "" || len(result.Errors) != 0 {

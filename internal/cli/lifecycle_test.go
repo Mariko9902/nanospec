@@ -15,6 +15,7 @@ func TestRunCheckpointAndRevise(t *testing.T) {
 	var checkpointErr bytes.Buffer
 	checkpointCode := Run([]string{
 		"checkpoint",
+		"--spec-revision", "rev-1",
 		"--owner", "executor-a",
 		"--status", "active",
 		"--next", "implement A1",
@@ -32,7 +33,7 @@ func TestRunCheckpointAndRevise(t *testing.T) {
 		t.Fatalf("code = %d, stdout = %q, stderr = %q", reviseCode, reviseOut.String(), reviseErr.String())
 	}
 
-	state := readQueryFile(t, filepath.Join(cycleDirectory, "execution-state.md"))
+	state := readQueryFile(t, filepath.Join(cycleDirectory, "cycle.md"))
 	for _, fragment := range []string{"Spec Changes: 1", "spec_rev: rev-2", "Acceptance: pending: specification revised at rev-2"} {
 		if !strings.Contains(state, fragment) {
 			t.Fatalf("state missing %q:\n%s", fragment, state)

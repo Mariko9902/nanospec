@@ -16,8 +16,8 @@ const validateHelp = "Usage: nanospec validate [--sync-views] [cycle-dir]\n\n" +
 	"checks only the stable, machine-checkable subset.\n\n" +
 	"Options:\n" +
 	"  -h, --help    Show this help\n" +
-	"  --sync-views  Update Dependency Waves, Dependency Graph and Progress Tree.\n" +
-	"                Uses Story depends_on, Wave entry order and Acceptance Status.\n" +
+	"  --sync-views  Update the Dependency Graph and its execution status labels.\n" +
+	"                Uses Story depends_on, Active Lanes and Acceptance Status.\n" +
 	"                All other content is preserved. Without this flag, no files change.\n\n" +
 	"Exit codes:\n" +
 	"  0  Validation passed\n" +

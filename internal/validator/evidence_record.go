@@ -94,6 +94,8 @@ func parseEvidenceRecord(file, source string, story Story, report *diagnostic.Re
 	record.Context = evidenceContext(document.Body)
 	if !singleLineText(record.Context) {
 		report.AddError(file, "Acceptance Results must contain one verification context line")
+	} else if inputError := validateObservationContext(record.Context); inputError != "" {
+		report.AddError(file, inputError)
 	}
 	record.Results = parseEvidenceResults(sectionContent(document.Body, 2, "Acceptance Results"), story, record.VerificationStatus, file, report)
 	validateEvidenceVerification(file, record, story, report)
@@ -147,6 +149,11 @@ func parseEvidenceResults(content string, story Story, verificationStatus, file 
 		} {
 			if !singleLineText(field.value) {
 				report.AddError(file, "Acceptance Results "+id+" missing "+field.name)
+			}
+		}
+		if singleLineText(item.evidenceContext) {
+			if inputError := validateObservationContext(item.evidenceContext); inputError != "" {
+				report.AddError(file, "Acceptance Results "+id+": "+inputError)
 			}
 		}
 		if verificationStatus == "passed" && item.status != "confirmed" {

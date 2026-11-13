@@ -36,6 +36,9 @@ func validateSpec(target string, syncViews, validateEvidenceRecords bool) Valida
 	}
 
 	validateCycle(target, updateTarget, validateEvidenceRecords, &report)
+	if report.HasErrors() {
+		updates = nil
+	}
 	return ValidationResult{
 		Errors:   report.Errors(),
 		Warnings: report.Warnings(),
@@ -45,6 +48,5 @@ func validateSpec(target string, syncViews, validateEvidenceRecords bool) Valida
 
 func isCycleDirectory(directory string) bool {
 	return cycleIDPattern.MatchString(filepath.Base(directory)) ||
-		fileExists(filepath.Join(directory, "cycle.md")) ||
-		fileExists(filepath.Join(directory, "execution-state.md"))
+		fileExists(filepath.Join(directory, "cycle.md"))
 }

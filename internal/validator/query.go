@@ -26,31 +26,15 @@ func loadCycleSnapshot(target string, validateEvidenceRecords bool) (CycleSnapsh
 	}
 
 	cycleFile := filepath.Join(cycleDirectory, "cycle.md")
-	stateFile := filepath.Join(cycleDirectory, "execution-state.md")
 	cycleText, err := os.ReadFile(cycleFile)
 	if err != nil {
 		return CycleSnapshot{}, ValidationResult{InputError: "cannot read cycle.md: " + err.Error()}
 	}
-	stateText, err := os.ReadFile(stateFile)
-	if err != nil {
-		return CycleSnapshot{}, ValidationResult{InputError: "cannot read execution-state.md: " + err.Error()}
-	}
-	canonicalCycle := string(cycleText)
-	canonicalState := string(stateText)
-	for _, update := range result.Updates {
-		switch update.File {
-		case cycleFile:
-			canonicalCycle = update.After
-		case stateFile:
-			canonicalState = update.After
-		}
-	}
 
 	stories := loadSnapshotStories(cycleDirectory)
 	var report diagnostic.Report
-	stateDocument := specdoc.ParseDocument(stateFile, canonicalState, &report)
-	revision, _ := stateDocument.Frontmatter.String("spec_rev")
-	cycleDocument := specdoc.ParseDocument(cycleFile, canonicalCycle, &report)
+	cycleDocument := specdoc.ParseDocument(cycleFile, string(cycleText), &report)
+	revision, _ := cycleDocument.Frontmatter.String("spec_rev")
 	language, err := readSpecLanguage(cycleDocument.Frontmatter)
 	if err != nil {
 		return CycleSnapshot{}, ValidationResult{InputError: err.Error()}
@@ -60,12 +44,10 @@ func loadCycleSnapshot(target string, validateEvidenceRecords bool) (CycleSnapsh
 		Directory:    cycleDirectory,
 		SpecRevision: revision,
 		SpecLanguage: language,
-		CycleText:    canonicalCycle,
-		StateText:    canonicalState,
+		CycleText:    string(cycleText),
 		Stories:      stories,
-		Waves:        readDependencyWaves(canonicalCycle),
-		Acceptance:   extractAcceptanceBlocks(stateDocument.Body),
-		ActiveLanes:  extractLaneBlocks(stateDocument.Body),
+		Acceptance:   extractAcceptanceBlocks(cycleDocument.Body),
+		ActiveLanes:  extractLaneBlocks(cycleDocument.Body),
 	}, result
 }
 
@@ -74,12 +56,12 @@ func (snapshot CycleSnapshot) View(name string) (string, error) {
 	switch name {
 	case "overview":
 		return snapshot.overviewView()
-	case "waves":
-		return "### Dependency Waves\n\n" + sectionContent(snapshot.CycleText, 3, "Dependency Waves") + "\n", nil
 	case "graph":
-		return "### Dependency Graph\n\n" + sectionContent(snapshot.CycleText, 3, "Dependency Graph") + "\n", nil
-	case "tree":
-		return "## Progress Tree\n\n" + sectionContent(snapshot.StateText, 2, "Progress Tree") + "\n", nil
+		text, err := RenderCycleViews(snapshot.CycleText, snapshot.Stories)
+		if err != nil {
+			return "", err
+		}
+		return "## Dependency Graph\n\n" + sectionContent(text, 2, "Dependency Graph") + "\n", nil
 	default:
 		return "", fmt.Errorf("unknown view: %s", name)
 	}
@@ -88,27 +70,24 @@ func (snapshot CycleSnapshot) View(name string) (string, error) {
 func (snapshot CycleSnapshot) overviewView() (string, error) {
 	var output strings.Builder
 	fmt.Fprintln(&output, "# Cycle Overview")
-	for _, wave := range snapshot.Waves {
-		fmt.Fprintln(&output)
-		fmt.Fprintf(&output, "## Wave %d\n", wave.Number)
-		for _, entry := range wave.Entries {
-			story, found := snapshot.Stories[entry.ID]
-			if !found {
-				return "", fmt.Errorf("overview Story is missing: %s", entry.ID)
-			}
-			storyText, err := os.ReadFile(story.File)
-			if err != nil {
-				return "", fmt.Errorf("cannot read overview Story %s: %w", entry.ID, err)
-			}
-			orientation := sectionContent(string(storyText), 2, "Orientation")
-			if strings.TrimSpace(orientation) == "" {
-				return "", fmt.Errorf("overview Story has no Orientation: %s", entry.ID)
-			}
-			fmt.Fprintln(&output)
-			fmt.Fprintf(&output, "### %s (`%s`)\n\n", story.Title, entry.ID)
-			fmt.Fprintln(&output, orientationDetails(orientation))
-		}
+	order, err := orderedStoryIDs(snapshot.Stories)
+	if err != nil {
+		return "", err
 	}
+	for _, id := range order {
+		story := snapshot.Stories[id]
+		storyText, err := os.ReadFile(story.File)
+		if err != nil {
+			return "", fmt.Errorf("cannot read overview Story %s: %w", id, err)
+		}
+		orientation := sectionContent(string(storyText), 2, "Orientation")
+		if strings.TrimSpace(orientation) == "" {
+			return "", fmt.Errorf("overview Story has no Orientation: %s", id)
+		}
+		fmt.Fprintf(&output, "\n## [%s] %s (%s)\n\n", storyStatus(id, snapshot.Acceptance, snapshot.ActiveLanes), story.Title, id)
+		fmt.Fprintln(&output, orientationDetails(orientation))
+	}
+
 	return output.String(), nil
 }
 
@@ -135,41 +114,31 @@ func (snapshot CycleSnapshot) ReadyCandidates() []ReadyCandidate {
 	}
 	assigned := make(map[string]struct{})
 	for _, lane := range snapshot.ActiveLanes {
-		if lane.Fields["Status"] != "done" {
-			assigned[lane.Fields["Story"]] = struct{}{}
-		}
+		assigned[lane.Fields["Story"]] = struct{}{}
 	}
 
 	candidates := make([]ReadyCandidate, 0)
-	for _, wave := range snapshot.Waves {
-		for _, entry := range wave.Entries {
-			story := snapshot.Stories[entry.ID]
-			current := acceptance[entry.ID]
-			if current != "pending" && current != "rejected" {
-				continue
-			}
-			if _, found := assigned[entry.ID]; found {
-				continue
-			}
-			dependencies := make([]DependencyStatus, 0, len(story.DependsOn))
-			allowed := true
-			for _, dependency := range story.DependsOn {
-				status := acceptance[dependency]
-				dependencies = append(dependencies, DependencyStatus{StoryID: dependency, Acceptance: status})
-				if status != "ready" && status != "accepted" {
-					allowed = false
-				}
-			}
-			if allowed {
-				candidates = append(candidates, ReadyCandidate{
-					StoryID:      entry.ID,
-					Wave:         wave.Number,
-					Acceptance:   current,
-					Dependencies: dependencies,
-				})
+	for _, id := range sortedStoryIDs(snapshot.Stories) {
+		story := snapshot.Stories[id]
+		current := acceptance[id]
+		if current != "pending" && current != "rejected" {
+			continue
+		}
+		if _, found := assigned[id]; found {
+			continue
+		}
+		dependencies := dependencyStatuses(story, snapshot)
+		allowed := true
+		for _, dependency := range dependencies {
+			if dependency.Status != StoryReady && dependency.Status != StoryAccepted {
+				allowed = false
 			}
 		}
+		if allowed {
+			candidates = append(candidates, ReadyCandidate{StoryID: id, Acceptance: current, Dependencies: dependencies})
+		}
 	}
+
 	return candidates
 }
 
@@ -196,7 +165,7 @@ func BuildExecutionPackage(target, executionRules string) (ExecutionPackage, Val
 		return ExecutionPackage{}, ValidationResult{InputError: "cannot read story.md: " + err.Error()}
 	}
 	acceptance := acceptanceState(story.ID, snapshot.Acceptance)
-	dependencies := dependencyStatuses(story, snapshot.Acceptance)
+	dependencies := dependencyStatuses(story, snapshot)
 	openQuestions := hasOpenQuestions(string(storyText))
 
 	var output strings.Builder
@@ -216,8 +185,8 @@ func BuildExecutionPackage(target, executionRules string) (ExecutionPackage, Val
 	writeDependencyContext(&output, story, snapshot.Acceptance)
 	writeCurrentStoryState(&output, story.ID, snapshot)
 	writeContextSection(&output, "NanoSpec Execution Rules", strings.TrimSpace(executionRules))
-	writeContextSection(&output, "Current Situation", sectionContent(snapshot.StateText, 2, "Current Situation"))
-	writeContextSection(&output, "Open Issues", sectionContent(snapshot.StateText, 2, "Open Issues"))
+	writeContextSection(&output, "Current Situation", sectionContent(snapshot.CycleText, 2, "Current Situation"))
+	writeContextSection(&output, "Open Issues", sectionContent(snapshot.CycleText, 2, "Open Issues"))
 	writeContextSection(&output, "Story Specification", strings.TrimSpace(string(storyText)))
 	if inputError := writeRegressionContext(&output, story, result.Warnings); inputError != "" {
 		return ExecutionPackage{}, ValidationResult{InputError: inputError}
@@ -241,6 +210,8 @@ func BuildExecutionPackage(target, executionRules string) (ExecutionPackage, Val
 		SpecRevision:          snapshot.SpecRevision,
 		SpecLanguage:          snapshot.SpecLanguage,
 		Acceptance:            acceptance,
+		Status:                storyStatus(story.ID, snapshot.Acceptance, snapshot.ActiveLanes),
+		ResumeStatus:          storyResumeStatus(story.ID, snapshot.ActiveLanes),
 		Dependencies:          dependencies,
 		OpenQuestions:         openQuestions,
 		RequiredConfirmations: confirmations,
@@ -256,6 +227,10 @@ func ResolvePreparationGates(packages []ExecutionPackage) {
 	}
 	for index := range packages {
 		item := &packages[index]
+		if item.Status == StoryBlocked {
+			item.Gate = "blocked"
+			continue
+		}
 		switch item.Acceptance {
 		case "accepted":
 			item.Gate = "accepted"
@@ -271,7 +246,7 @@ func ResolvePreparationGates(packages []ExecutionPackage) {
 		waitingForSelected := false
 		blocked := false
 		for _, dependency := range item.Dependencies {
-			if dependency.Acceptance == "ready" || dependency.Acceptance == "accepted" {
+			if dependency.Status == StoryReady || dependency.Status == StoryAccepted {
 				continue
 			}
 			if _, found := selected[item.CycleID+"/"+dependency.StoryID]; found {
@@ -300,14 +275,14 @@ func acceptanceState(storyID string, blocks []FieldBlock) string {
 	return ""
 }
 
-func dependencyStatuses(story Story, blocks []FieldBlock) []DependencyStatus {
-	statuses := make(map[string]string, len(blocks))
-	for _, block := range blocks {
+func dependencyStatuses(story Story, snapshot CycleSnapshot) []DependencyStatus {
+	statuses := make(map[string]string, len(snapshot.Acceptance))
+	for _, block := range snapshot.Acceptance {
 		statuses[block.ID] = leadingToken(block.Fields["Acceptance"])
 	}
 	dependencies := make([]DependencyStatus, 0, len(story.DependsOn))
 	for _, dependency := range story.DependsOn {
-		dependencies = append(dependencies, DependencyStatus{StoryID: dependency, Acceptance: statuses[dependency]})
+		dependencies = append(dependencies, DependencyStatus{StoryID: dependency, Acceptance: statuses[dependency], Status: storyStatus(dependency, snapshot.Acceptance, snapshot.ActiveLanes)})
 	}
 	return dependencies
 }
@@ -359,7 +334,7 @@ func resolveCycleDirectory(target string) (string, string) {
 	if err != nil {
 		return "", "cannot inspect target: " + err.Error()
 	}
-	if !info.IsDir() || !fileExists(filepath.Join(absolute, "cycle.md")) || !fileExists(filepath.Join(absolute, "execution-state.md")) {
+	if !info.IsDir() || !fileExists(filepath.Join(absolute, "cycle.md")) || !fileExists(filepath.Join(absolute, "cycle.md")) {
 		return "", "target must be one Cycle directory: " + absolute
 	}
 	return absolute, ""
@@ -428,6 +403,7 @@ func writeDependencyContext(output *strings.Builder, story Story, blocks []Field
 
 func writeCurrentStoryState(output *strings.Builder, storyID string, snapshot CycleSnapshot) {
 	fmt.Fprintln(output, "## Current Story State")
+	fmt.Fprintf(output, "- Status: %s\n", storyStatus(storyID, snapshot.Acceptance, snapshot.ActiveLanes))
 	fmt.Fprintln(output)
 	for _, block := range snapshot.Acceptance {
 		if block.ID == storyID {
@@ -440,7 +416,10 @@ func writeCurrentStoryState(output *strings.Builder, storyID string, snapshot Cy
 			continue
 		}
 		lanes++
-		fmt.Fprintf(output, "- Lane %s: owner=%s, status=%s, next=%s\n", lane.ID, lane.Fields["Owner"], lane.Fields["Status"], lane.Fields["Next"])
+		fmt.Fprintf(output, "- Lane %s: owner=%s, status=%s, implementation_complete=%s, next=%s\n", lane.ID, lane.Fields["Owner"], lane.Fields["Status"], lane.Fields["Implementation Complete"], lane.Fields["Next"])
+		if lane.Fields["Resume Status"] != "" {
+			fmt.Fprintf(output, "- Resume Status: %s\n", lane.Fields["Resume Status"])
+		}
 	}
 	if lanes == 0 {
 		fmt.Fprintln(output, "- Active Lane: none")

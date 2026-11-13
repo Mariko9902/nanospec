@@ -4,7 +4,7 @@ These rules apply when an agent receives a Story. The caller's instructions, pro
 
 ## 1. Execution unit
 
-Execute a Story as one defined result. Keep the temporary implementation plan in the current session. Record progress, blockers, recovery actions, and acceptance facts in `execution-state.md`; keep the stable definition in the Story.
+Execute a Story as one defined result. Keep the temporary implementation plan in the current session. Record progress, blockers, recovery actions, and acceptance facts in `cycle.md`; keep the stable definition in the Story.
 
 Before starting, check that:
 
@@ -32,7 +32,7 @@ Before starting or resuming, check every `depends_on` prerequisite:
 - The required code, service, data, or API is available in the actual execution environment. An implementation on another branch or evidence from another environment is not enough by itself.
 - If the project or Story requires prior human acceptance, confirm the human-accepted Outcome or obtain an explicit confirmation for the result being used. Record any separately obtained human confirmation in the current Story's state explanation before proceeding. Acceptance under a verification policy does not supply a required human decision.
 
-A prerequisite may remain `ready` when these checks pass. Its progress stays unchecked and no Outcome is created early. Execute only the work the caller selected.
+A prerequisite may remain `ready` when these checks pass. It remains unaccepted and no Outcome is created early. Execute only the work the caller selected.
 
 `regression_of` supplies frozen background. It does not pass on the old acceptance conclusion or replace new evidence. A warning about missing artifacts or context describes a limit in the old record; it does not mean the missing material exists or that current requirements can be reduced.
 
@@ -53,10 +53,10 @@ Read as needed:
 1. Project rules, public contracts, and supplied product context.
 2. The current `story.md`.
 3. Its optional `implementation-brief.md`, for additional repository findings.
-4. The current `execution-state.md`.
+4. The current `cycle.md`.
 5. Code, configuration, data, and running behavior discovered while checking the Story.
 
-Read `cycle.md` when dependencies, ordering, or coordination need confirmation. Do not load every Story by default or rely on another Story's prose as an unstated requirement.
+The prepared package includes the selected current facts. Read the relevant `cycle.md` sections when execution, ordering, or coordination needs confirmation. Do not load every Story by default or rely on another Story's prose as an unstated requirement.
 
 Applicable Rules already contains selected rule bodies. Execution does not require rescanning the whole pool. Source links support traceability; their latest content cannot silently replace a snapshot. If a snapshot conflicts with current mandatory project rules or explicit instructions, handle the conflict through the change rules.
 
@@ -66,7 +66,7 @@ When work is arranged in parallel, check for incompatible edits to the same API,
 
 Keep state current:
 
-- Use a checkpoint when starting, resuming, pausing, blocking, or ending implementation. It reads and validates the current state before updating the selected Story's Lane, situation, issues, and timestamp.
+- Use a checkpoint when starting, resuming, blocking, or ending implementation. It reads and validates the current state before updating the selected Story's Lane, situation, issues, and timestamp.
 - Writes to one Cycle run in sequence across reading, validation, and saving. If the wait exceeds 10 seconds, the command fails. Reread the state before trying again; do not overwrite another executor's facts by hand.
 - `Owner` is the current executor's stable identifier and follows the same format as `implemented_by`. It can change before evidence exists. Once `acceptance/evidence.md` exists, a checkpoint rejects a direct change. Continue under the original identifier without rewriting implementation responsibility.
 - `Current Situation` holds current facts. Each Lane holds its Story, Owner, Status, and Next action. One Lane's status is not the entire Cycle's status.
@@ -74,10 +74,16 @@ Keep state current:
 - `Acceptance Status` records the stage, covered or unconfirmed Acceptance IDs, observation context, and evidence location. Outcome holds the full accepted result.
 - Acceptance writes the current `spec_rev` and exact Story digest. A changed accepted Story fails validation. Fix a later regression with a new Story.
 - If `story.md` changes between acceptance preparation and saving, acceptance refuses to freeze or restores the original evidence and state. Recheck the specification before trying again.
-- Use rejection to record a final refusal of a ready result. It returns the evidence for rework, increments the rework count, and pauses the Lane. A new observation returns acceptance to `pending`.
+- Use rejection to record a final refusal of a ready result. It returns the evidence for rework, increments the rework count, and sets the same Lane to rejected. Actual repair starts with a rework checkpoint.
+- A verification result of `rework` sets the original Lane to rejected and records that rework must be assigned. AI and human refusals share this stage. Preparation does not advance it. When the executor actually accepts the repair assignment, use `checkpoint --status rework`. Keep rework through its implementation and self-checks; a pass returns it to ready.
 - Keep only unresolved issues and method feedback that still needs attention. Remove a blocker when it is resolved.
-- After editing formal execution meaning, run `nanospec revise` once for every affected Story in that Cycle. It advances the revision and the started Stories' change counts. All in-progress records follow the new revision; only selected evidence becomes stale. The caller still determines the affected set.
+- Keep the revision returned by preparation as the execution baseline. Pass it as `--spec-revision` to `checkpoint`, `evidence`, `verify`, `accept`, and `reject`. These commands check it against the current Cycle after acquiring the write lock. A mismatch refuses the write without changing records; prepare again and assess the Story, its prerequisites, implementation, and evidence before continuing. Do not copy the new revision into a command without that assessment.
+- Check the baseline before a new implementation stage, before changing a shared contract, and before verification or acceptance. Recheck at the next checkpoint during long work. An optional coordinator may notify earlier, but correct execution must not depend on one. No version number can interrupt an agent that has not checked it.
+- After editing formal execution meaning, run `nanospec revise` once for every affected Story in that Cycle. It advances the revision and the started Stories' change counts, and records the next action to reassess the specification. Active affected work becomes blocked; rejected work still waits for its assignment, and existing blockers keep their recovery facts. All in-progress records follow the new revision; only selected evidence becomes stale. The caller still determines the affected set.
 - When the revision changes, check the definition, implementation, and evidence. Old observations keep their original context. Reobserve affected conditions.
+- Use `checkpoint --complete --next none` when implementation has ended. The active or rework stage continues through self-checks until verification passes.
+- A blocked checkpoint preserves its prior stage in Resume Status. Resolve the cause before checkpointing back; restoring ready requires current passed evidence. Blocking does not authorize verification or acceptance.
+- The graph shows one of pending, active, ready, rejected, rework, blocked, or accepted as a single leading bracketed label. Cycle summary is derived from these facts.
 - Synchronize views after changing order, dependencies, or acceptance state. A view does not create a new decision or evidence.
 
 State copies in different worktrees do not synchronize themselves. Reconcile them through the project's normal collaboration process before using a combined state.
@@ -121,6 +127,7 @@ Resolve Open Questions and write clarification decisions into the formal require
 - Check the real business flow, including the page, API, persisted data, and related states.
 - Observe the main result and the boundaries or non-success conditions defined in the Story.
 - Keep enough page, response, export, or persisted-result evidence to support each Acceptance ID.
+- Record each item's context as a JSON object with `spec_revision`, `code_revision`, `environment`, and `observed_at`. Use the prepared revision, a full Git commit or SHA-256 artifact digest, the actual environment entry or working directory, and an ISO-8601 observation time with timezone. Do not replace those values with a reference to Verification Context or another item.
 
 For an Executable Check, confirm the command, environment, and Expected value still match the current version before running it. A check supports only the IDs and observations it actually covers. An unreferenced check, an environment mismatch, or partial coverage cannot establish the rest of Acceptance.
 

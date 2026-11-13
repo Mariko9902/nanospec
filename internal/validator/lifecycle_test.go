@@ -12,7 +12,7 @@ func TestBuildCheckpointUpdateCreatesAndReusesLane(t *testing.T) {
 	target := filepath.Join(cycleDirectory, "story-01-base")
 	at := time.Date(2026, 9, 10, 12, 30, 0, 0, time.FixedZone("CST", 8*60*60))
 
-	created, result := BuildCheckpointUpdate(target, CheckpointRequest{
+	created, result := BuildCheckpointUpdate(target, CheckpointRequest{SpecRevision: "rev-1",
 		Owner: "executor-a", Status: "active", Next: "implement A1", Situation: "repository facts confirmed", At: at,
 	})
 	if result.InputError != "" || len(result.Errors) != 0 {
@@ -25,7 +25,7 @@ func TestBuildCheckpointUpdateCreatesAndReusesLane(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	blocked, result := BuildCheckpointUpdate(target, CheckpointRequest{
+	blocked, result := BuildCheckpointUpdate(target, CheckpointRequest{SpecRevision: "rev-1",
 		Owner: "executor-a", Status: "blocked", Next: "wait for test account", Situation: "implementation is available", Issue: "test account is unavailable", At: at.Add(time.Minute),
 	})
 	if result.InputError != "" || len(result.Errors) != 0 {
@@ -38,7 +38,7 @@ func TestBuildCheckpointUpdateCreatesAndReusesLane(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	state := readTestFile(t, filepath.Join(cycleDirectory, "execution-state.md"))
+	state := readTestFile(t, filepath.Join(cycleDirectory, "cycle.md"))
 	for _, fragment := range []string{
 		"- Lane: lane-01",
 		"  - Story: story-01-base",
@@ -64,12 +64,12 @@ func TestBuildCheckpointUpdateEnforcesRecordedStartGates(t *testing.T) {
 	})
 	target := filepath.Join(cycleDirectory, "story-02-help")
 	at := time.Date(2026, 9, 10, 12, 45, 0, 0, time.UTC)
-	request := CheckpointRequest{Owner: "executor-a", Status: "active", Next: "continue", Situation: "starting", At: at}
+	request := CheckpointRequest{SpecRevision: "rev-1", Owner: "executor-a", Status: "active", Next: "continue", Situation: "starting", At: at}
 
 	if _, result := BuildCheckpointUpdate(target, request); !strings.Contains(result.InputError, "dependency is ready: story-01-base") {
 		t.Fatalf("dependency gate result = %#v", result)
 	}
-	blocked, result := BuildCheckpointUpdate(target, CheckpointRequest{
+	blocked, result := BuildCheckpointUpdate(target, CheckpointRequest{SpecRevision: "rev-1",
 		Owner: "executor-a", Status: "blocked", Next: "wait for dependency", Situation: "dependency unavailable",
 		Issue: "story-01-base is not ready", At: at,
 	})
@@ -93,7 +93,7 @@ func TestBuildRevisionUpdateIncrementsCycleAndAffectedLanesOnce(t *testing.T) {
 	})
 	at := time.Date(2026, 9, 10, 13, 0, 0, 0, time.FixedZone("CST", 8*60*60))
 	for index, storyID := range []string{"story-01-base", "story-02-help"} {
-		checkpoint, result := BuildCheckpointUpdate(filepath.Join(cycleDirectory, storyID), CheckpointRequest{
+		checkpoint, result := BuildCheckpointUpdate(filepath.Join(cycleDirectory, storyID), CheckpointRequest{SpecRevision: "rev-1",
 			Owner: "executor-a", Status: "active", Next: "continue", Situation: "work started", At: at.Add(time.Duration(index) * time.Minute),
 		})
 		if result.InputError != "" || len(result.Errors) != 0 {
@@ -118,7 +118,7 @@ func TestBuildRevisionUpdateIncrementsCycleAndAffectedLanesOnce(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	state := readTestFile(t, filepath.Join(cycleDirectory, "execution-state.md"))
+	state := readTestFile(t, filepath.Join(cycleDirectory, "cycle.md"))
 	if strings.Count(state, "  - Spec Changes: 1") != 2 {
 		t.Fatalf("state = %s", state)
 	}
@@ -157,14 +157,8 @@ func TestBuildRevisionUpdateSynchronizesChangedDependencyViews(t *testing.T) {
 	}
 
 	cycle := readTestFile(t, filepath.Join(cycleDirectory, "cycle.md"))
-	state := readTestFile(t, filepath.Join(cycleDirectory, "execution-state.md"))
-	for _, fragment := range []string{"#### Wave 2", "S01 --> S02"} {
-		if !strings.Contains(cycle, fragment) {
-			t.Fatalf("cycle missing %q:\n%s", fragment, cycle)
-		}
-	}
-	if !strings.Contains(state, "spec_rev: rev-2") {
-		t.Fatalf("state did not advance revision:\n%s", state)
+	if !strings.Contains(cycle, "S01 --> S02") || !strings.Contains(cycle, "spec_rev: rev-2") {
+		t.Fatalf("Cycle dependency or revision was not updated:\n%s", cycle)
 	}
 	if validated := ValidateSpec(cycleDirectory, false); len(validated.Errors) != 0 {
 		t.Fatalf("errors = %#v", validated.Errors)
@@ -173,13 +167,13 @@ func TestBuildRevisionUpdateSynchronizesChangedDependencyViews(t *testing.T) {
 
 func TestBuildLifecycleUpdatesRejectUnsafeState(t *testing.T) {
 	cycleDirectory := writeCycleFixture(t, map[string][]string{"story-01-base": {}})
-	stateFile := filepath.Join(cycleDirectory, "execution-state.md")
+	stateFile := filepath.Join(cycleDirectory, "cycle.md")
 	state := strings.Replace(readTestFile(t, stateFile), "Acceptance: pending:", "Acceptance: ready:", 1)
 	writeFixtureFile(t, stateFile, state)
 	target := filepath.Join(cycleDirectory, "story-01-base")
 	at := time.Date(2026, 9, 10, 14, 0, 0, 0, time.UTC)
 
-	if _, result := BuildCheckpointUpdate(target, CheckpointRequest{Owner: "executor-a", Status: "active", Next: "continue", Situation: "work", At: at}); !strings.Contains(result.InputError, "Acceptance state ready") {
+	if _, result := BuildCheckpointUpdate(target, CheckpointRequest{SpecRevision: "rev-1", Owner: "executor-a", Status: "active", Next: "continue", Situation: "work", At: at}); !strings.Contains(result.InputError, "cannot checkpoint ready as active") {
 		t.Fatalf("checkpoint result = %#v", result)
 	}
 	if _, result := BuildRevisionUpdate([]string{target, target}, RevisionRequest{Reason: "change", At: at}); !strings.Contains(result.InputError, "duplicate revised Story") {
@@ -189,7 +183,7 @@ func TestBuildLifecycleUpdatesRejectUnsafeState(t *testing.T) {
 
 func TestValidateActiveLanesRejectsDuplicateStory(t *testing.T) {
 	cycleDirectory := writeCycleFixture(t, map[string][]string{"story-01-base": {}})
-	stateFile := filepath.Join(cycleDirectory, "execution-state.md")
+	stateFile := filepath.Join(cycleDirectory, "cycle.md")
 	state := strings.Replace(readTestFile(t, stateFile), "## Active Lanes\n\n- none", `## Active Lanes
 
 - Lane: lane-01
@@ -200,7 +194,7 @@ func TestValidateActiveLanesRejectsDuplicateStory(t *testing.T) {
 - Lane: lane-02
   - Story: story-01-base
   - Owner: executor-b
-  - Status: paused
+  - Status: rejected
   - Next: wait`, 1)
 	writeFixtureFile(t, stateFile, state)
 

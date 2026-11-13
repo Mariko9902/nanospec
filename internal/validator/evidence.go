@@ -5,12 +5,12 @@ import (
 	"strconv"
 	"time"
 
-	"nanospec/internal/diagnostic"
 	"nanospec/internal/specdoc"
 )
 
 // EvidenceCaptureRequest describes an observed Acceptance result.
 type EvidenceCaptureRequest struct {
+	SpecRevision  string
 	ImplementedBy string
 	AcceptanceID  string
 	Observed      string
@@ -31,10 +31,11 @@ type EvidenceCaptureResult struct {
 
 // VerificationRequest describes a complete evidence review.
 type VerificationRequest struct {
-	VerifiedBy string
-	Mode       VerificationMode
-	Result     string
-	At         time.Time
+	SpecRevision string
+	VerifiedBy   string
+	Mode         VerificationMode
+	Result       string
+	At           time.Time
 }
 
 // VerificationResult holds the changes produced by a review.
@@ -48,9 +49,10 @@ type VerificationResult struct {
 
 // RejectionRequest records an explicit decision to reject a delivery.
 type RejectionRequest struct {
-	RejectedBy string
-	Reason     string
-	At         time.Time
+	SpecRevision string
+	RejectedBy   string
+	Reason       string
+	At           time.Time
 }
 
 // RejectionResult holds the changes needed to return a delivery for rework.
@@ -63,9 +65,10 @@ type RejectionResult struct {
 
 // AcceptanceRequest describes an acceptance decision that has already been authorized.
 type AcceptanceRequest struct {
-	AcceptedBy string
-	Method     AcceptancePolicy
-	At         time.Time
+	SpecRevision string
+	AcceptedBy   string
+	Method       AcceptancePolicy
+	At           time.Time
 }
 
 type evidenceRecord struct {
@@ -91,6 +94,12 @@ func BuildEvidenceUpdate(target string, request EvidenceCaptureRequest) (Evidenc
 	storyDirectory, snapshot, story, lane, result := loadActiveStory(target)
 	if result.InputError != "" || len(result.Errors) > 0 {
 		return EvidenceCaptureResult{}, result
+	}
+	if inputError := validatePreparedRevision(request.SpecRevision, snapshot.SpecRevision); inputError != "" {
+		return EvidenceCaptureResult{}, ValidationResult{InputError: inputError}
+	}
+	if inputError := validateStoryStage(storyStatus(story.ID, snapshot.Acceptance, snapshot.ActiveLanes), StoryActive, StoryRework); inputError != "" {
+		return EvidenceCaptureResult{}, ValidationResult{InputError: inputError}
 	}
 	if story.HasOutcome {
 		return EvidenceCaptureResult{}, ValidationResult{InputError: "accepted Story is frozen: " + story.ID}
@@ -120,6 +129,11 @@ func BuildEvidenceUpdate(target string, request EvidenceCaptureRequest) (Evidenc
 		before = source
 		record.SpecChangeCount = laneSpecChanges(lane)
 	}
+	context, err := normalizeObservationContext(request.Context, request.SpecRevision)
+	if err != nil {
+		return EvidenceCaptureResult{}, ValidationResult{InputError: err.Error()}
+	}
+	record.Context = context
 	record.VerificationStatus = "pending"
 	record.VerifiedBy = "none"
 	record.VerificationMode = "none"
@@ -133,30 +147,32 @@ func BuildEvidenceUpdate(target string, request EvidenceCaptureRequest) (Evidenc
 	}
 	record.Results[request.AcceptanceID] = acceptanceResult{
 		id: request.AcceptanceID, status: "observed", observed: request.Observed,
-		evidenceCommand: request.Command, evidenceResult: request.Result, evidenceArtifacts: request.Artifacts, evidenceContext: request.Context,
+		evidenceCommand: request.Command, evidenceResult: request.Result, evidenceArtifacts: request.Artifacts, evidenceContext: context,
 	}
 	after := renderEvidenceRecord(record, story.AcceptanceIDs)
 	if validation := validateEvidenceSource(evidenceFile, story, after); validation.InputError != "" || len(validation.Errors) > 0 {
 		return EvidenceCaptureResult{}, validation
 	}
 
-	state, err := updateAcceptanceState(snapshot.StateText, story.ID, "pending: acceptance/evidence.md updated for "+request.AcceptanceID+" at "+snapshot.SpecRevision)
+	state, err := updateAcceptanceState(snapshot.CycleText, story.ID, "pending: acceptance/evidence.md updated for "+request.AcceptanceID+" at "+snapshot.SpecRevision)
 	if err == nil {
 		state, err = updateManagedStateLine(state, "Current Situation", story.ID, "Evidence recorded for "+request.AcceptanceID)
 	}
 	if err == nil {
-		state, err = replaceFrontmatterScalar(state, "last_updated_at", request.At.Format(time.RFC3339))
+		state, err = specdoc.ReplaceFrontmatterScalar(state, "last_updated_at", request.At.Format(time.RFC3339))
 	}
 	if err != nil {
 		return EvidenceCaptureResult{}, ValidationResult{InputError: err.Error()}
 	}
-	stateFile := filepath.Join(snapshot.Directory, "execution-state.md")
-	if validation := validateUpdatedState(stateFile, snapshot, state); validation.InputError != "" || len(validation.Errors) > 0 {
+	stateFile := filepath.Join(snapshot.Directory, "cycle.md")
+	var validation ValidationResult
+	state, validation = canonicalizeCycleState(stateFile, snapshot.ID, snapshot.Stories, state)
+	if validation.InputError != "" || len(validation.Errors) > 0 {
 		return EvidenceCaptureResult{}, validation
 	}
 	return EvidenceCaptureResult{
 		CycleID: snapshot.ID, StoryID: story.ID, AcceptanceID: request.AcceptanceID,
-		Updates: []ViewUpdate{{File: evidenceFile, Before: before, After: after}, {File: stateFile, Before: snapshot.StateText, After: state}},
+		Updates: []ViewUpdate{{File: evidenceFile, Before: before, After: after}, {File: stateFile, Before: snapshot.CycleText, After: state}},
 	}, ValidationResult{}
 }
 
@@ -168,6 +184,12 @@ func BuildVerificationUpdate(target string, request VerificationRequest) (Verifi
 	storyDirectory, snapshot, story, lane, result := loadActiveStory(target)
 	if result.InputError != "" || len(result.Errors) > 0 {
 		return VerificationResult{}, result
+	}
+	if inputError := validatePreparedRevision(request.SpecRevision, snapshot.SpecRevision); inputError != "" {
+		return VerificationResult{}, ValidationResult{InputError: inputError}
+	}
+	if inputError := validateStoryStage(storyStatus(story.ID, snapshot.Acceptance, snapshot.ActiveLanes), StoryActive, StoryRework, StoryReady); inputError != "" {
+		return VerificationResult{}, ValidationResult{InputError: inputError}
 	}
 	if request.Result == "pass" {
 		if inputError := validateExecutionGate(story, snapshot); inputError != "" {
@@ -191,14 +213,14 @@ func BuildVerificationUpdate(target string, request VerificationRequest) (Verifi
 	if request.Mode == VerificationIndependent && record.ImplementedBy == request.VerifiedBy {
 		return VerificationResult{}, ValidationResult{InputError: "independent verification requires a different verifier"}
 	}
-	if request.Result == "pass" && lane.Fields["Status"] != "done" {
-		return VerificationResult{}, ValidationResult{InputError: "passing verification requires a done checkpoint"}
+	if request.Result == "pass" && !implementationComplete(lane) {
+		return VerificationResult{}, ValidationResult{InputError: "passing verification requires a complete checkpoint"}
 	}
 
 	record.VerifiedBy = request.VerifiedBy
 	record.VerificationMode = string(request.Mode)
 	record.VerifiedAt = request.At.Format(time.RFC3339)
-	stateValue := "pending: verification requires rework; acceptance/evidence.md"
+	stateValue := "rejected: verification requires rework; acceptance/evidence.md"
 	if request.Result == "pass" {
 		for _, id := range story.AcceptanceIDs {
 			item, found := record.Results[id]
@@ -226,23 +248,33 @@ func BuildVerificationUpdate(target string, request VerificationRequest) (Verifi
 	if validation := validateEvidenceSource(evidenceFile, story, after); validation.InputError != "" || len(validation.Errors) > 0 {
 		return VerificationResult{}, validation
 	}
-	state, err := updateAcceptanceState(snapshot.StateText, story.ID, stateValue)
+	state, err := updateAcceptanceState(snapshot.CycleText, story.ID, stateValue)
+	if err == nil {
+		status, next, complete := "rejected", "Await rework assignment", false
+		if request.Result == "pass" {
+			status, next, complete = "ready", "Wait for acceptance", true
+		}
+		lanes := setStoryLane(snapshot.ActiveLanes, story.ID, status, next, complete)
+		state, err = specdoc.ParseMarkdown(state).ReplaceSection(2, "Active Lanes", renderLanes(lanes))
+	}
 	if err == nil {
 		state, err = updateManagedStateLine(state, "Current Situation", story.ID, "Verification result: "+request.Result)
 	}
 	if err == nil {
-		state, err = replaceFrontmatterScalar(state, "last_updated_at", request.At.Format(time.RFC3339))
+		state, err = specdoc.ReplaceFrontmatterScalar(state, "last_updated_at", request.At.Format(time.RFC3339))
 	}
 	if err != nil {
 		return VerificationResult{}, ValidationResult{InputError: err.Error()}
 	}
-	stateFile := filepath.Join(snapshot.Directory, "execution-state.md")
-	if validation := validateUpdatedState(stateFile, snapshot, state); validation.InputError != "" || len(validation.Errors) > 0 {
+	stateFile := filepath.Join(snapshot.Directory, "cycle.md")
+	var validation ValidationResult
+	state, validation = canonicalizeCycleState(stateFile, snapshot.ID, snapshot.Stories, state)
+	if validation.InputError != "" || len(validation.Errors) > 0 {
 		return VerificationResult{}, validation
 	}
 	return VerificationResult{
 		CycleID: snapshot.ID, StoryID: story.ID, Status: record.VerificationStatus, ReworkCount: record.ReworkCount,
-		Updates: []ViewUpdate{{File: evidenceFile, Before: before, After: after}, {File: stateFile, Before: snapshot.StateText, After: state}},
+		Updates: []ViewUpdate{{File: evidenceFile, Before: before, After: after}, {File: stateFile, Before: snapshot.CycleText, After: state}},
 	}, ValidationResult{}
 }
 
@@ -254,6 +286,9 @@ func BuildRejectionUpdate(target string, request RejectionRequest) (RejectionRes
 	storyDirectory, snapshot, story, lane, result := loadActiveStory(target)
 	if result.InputError != "" || len(result.Errors) > 0 {
 		return RejectionResult{}, result
+	}
+	if inputError := validatePreparedRevision(request.SpecRevision, snapshot.SpecRevision); inputError != "" {
+		return RejectionResult{}, ValidationResult{InputError: inputError}
 	}
 	if acceptanceState(story.ID, snapshot.Acceptance) != "ready" {
 		return RejectionResult{}, ValidationResult{InputError: "rejection requires ready verification state"}
@@ -269,8 +304,8 @@ func BuildRejectionUpdate(target string, request RejectionRequest) (RejectionRes
 	if record.SpecRevision != snapshot.SpecRevision || record.VerificationStatus != "passed" {
 		return RejectionResult{}, ValidationResult{InputError: "rejection requires passed evidence for the current specification revision"}
 	}
-	if lane.Fields["Status"] != "done" || record.SpecChangeCount != laneSpecChanges(lane) {
-		return RejectionResult{}, ValidationResult{InputError: "rejection requires a matching done checkpoint"}
+	if !implementationComplete(lane) || record.SpecChangeCount != laneSpecChanges(lane) {
+		return RejectionResult{}, ValidationResult{InputError: "rejection requires a matching complete checkpoint"}
 	}
 
 	record.VerificationStatus = "rework"
@@ -286,36 +321,42 @@ func BuildRejectionUpdate(target string, request RejectionRequest) (RejectionRes
 		return RejectionResult{}, validation
 	}
 
-	lanes := cloneFieldBlocks(snapshot.ActiveLanes)
-	for index := range lanes {
-		if lanes[index].Fields["Story"] == story.ID {
-			lanes[index].Fields["Status"] = "paused"
-			lanes[index].Fields["Next"] = "Address rejection: " + request.Reason
+	lanes := setStoryLane(snapshot.ActiveLanes, story.ID, "rejected", "Await rework assignment; "+request.Reason, false)
+	blocked := lane.Fields["Status"] == "blocked"
+	if blocked {
+		lanes = cloneFieldBlocks(snapshot.ActiveLanes)
+		for index := range lanes {
+			if lanes[index].Fields["Story"] == story.ID {
+				lanes[index].Fields["Resume Status"] = "rejected"
+				lanes[index].Fields["Implementation Complete"] = "false"
+			}
 		}
 	}
-	state, err := specdoc.ParseMarkdown(snapshot.StateText).ReplaceSection(2, "Active Lanes", renderLanes(lanes))
+	state, err := specdoc.ParseMarkdown(snapshot.CycleText).ReplaceSection(2, "Active Lanes", renderLanes(lanes))
 	if err == nil {
 		state, err = updateAcceptanceState(state, story.ID, "rejected: rejected_by "+request.RejectedBy+"; "+request.Reason+"; acceptance/evidence.md")
 	}
 	if err == nil {
 		state, err = updateManagedStateLine(state, "Current Situation", story.ID, "Acceptance rejected; "+request.Reason)
 	}
-	if err == nil {
+	if err == nil && !blocked {
 		state, err = updateManagedStateLine(state, "Open Issues", story.ID, request.Reason)
 	}
 	if err == nil {
-		state, err = replaceFrontmatterScalar(state, "last_updated_at", request.At.Format(time.RFC3339))
+		state, err = specdoc.ReplaceFrontmatterScalar(state, "last_updated_at", request.At.Format(time.RFC3339))
 	}
 	if err != nil {
 		return RejectionResult{}, ValidationResult{InputError: err.Error()}
 	}
-	stateFile := filepath.Join(snapshot.Directory, "execution-state.md")
-	if validation := validateUpdatedState(stateFile, snapshot, state); validation.InputError != "" || len(validation.Errors) > 0 {
+	stateFile := filepath.Join(snapshot.Directory, "cycle.md")
+	var validation ValidationResult
+	state, validation = canonicalizeCycleState(stateFile, snapshot.ID, snapshot.Stories, state)
+	if validation.InputError != "" || len(validation.Errors) > 0 {
 		return RejectionResult{}, validation
 	}
 	return RejectionResult{
 		CycleID: snapshot.ID, StoryID: story.ID, ReworkCount: record.ReworkCount,
-		Updates: []ViewUpdate{{File: evidenceFile, Before: evidenceBefore, After: evidenceAfter}, {File: stateFile, Before: snapshot.StateText, After: state}},
+		Updates: []ViewUpdate{{File: evidenceFile, Before: evidenceBefore, After: evidenceAfter}, {File: stateFile, Before: snapshot.CycleText, After: state}},
 	}, ValidationResult{}
 }
 
@@ -368,6 +409,9 @@ func validateEvidenceCaptureRequest(request EvidenceCaptureRequest) string {
 		if !singleLineText(field.value) {
 			return field.name + " must be one non-empty line"
 		}
+	}
+	if inputError := validateObservationContext(request.Context); inputError != "" {
+		return inputError
 	}
 	if request.At.IsZero() {
 		return "evidence timestamp is required"
@@ -454,20 +498,4 @@ func cloneStories(source map[string]Story) map[string]Story {
 		result[id] = story
 	}
 	return result
-}
-
-func allStoriesAccepted(state string, stories map[string]Story) bool {
-	statuses := extractAcceptanceBlocks(specdoc.ParseDocument("execution-state.md", state, &diagnostic.Report{}).Body)
-	for id := range stories {
-		if acceptanceState(id, statuses) != "accepted" {
-			return false
-		}
-	}
-	return true
-}
-
-func validateUpdatedStateWithStories(file, cycleID string, stories map[string]Story, source string) ValidationResult {
-	var report diagnostic.Report
-	validateExecutionState(file, cycleID, stories, source, &report)
-	return ValidationResult{Errors: report.Errors(), Warnings: report.Warnings()}
 }

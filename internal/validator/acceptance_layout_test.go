@@ -16,11 +16,11 @@ func TestEvidenceDirectoryCreationRollsBackWithState(t *testing.T) {
 	story := filepath.Join(cycle, "story-01-base")
 	at := time.Now()
 	checkpointStoryDone(t, story, at)
-	capture, result := BuildEvidenceUpdate(story, EvidenceCaptureRequest{ImplementedBy: "executor-a", AcceptanceID: "A1", Observed: "visible", Command: "check", Result: "passed", Artifacts: "evidence/a1.txt", Context: "current", At: at})
+	capture, result := BuildEvidenceUpdate(story, EvidenceCaptureRequest{SpecRevision: "rev-1", ImplementedBy: "executor-a", AcceptanceID: "A1", Observed: "visible", Command: "check", Result: "passed", Artifacts: "evidence/a1.txt", Context: testObservationContext("rev-1", at), At: at})
 	if result.InputError != "" || len(result.Errors) > 0 {
 		t.Fatalf("%#v", result)
 	}
-	stateFile := filepath.Join(cycle, "execution-state.md")
+	stateFile := filepath.Join(cycle, "cycle.md")
 	before := readTestFile(t, stateFile)
 	err := saveViewUpdates(capture.Updates, func(from, to string) error {
 		if to == stateFile && strings.Contains(filepath.Base(from), ".tmp-") {

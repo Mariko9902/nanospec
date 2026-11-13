@@ -4,18 +4,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
-	"unicode/utf8"
 
 	"nanospec/internal/specdoc"
 )
-
-// CycleViews holds the Cycle and state views generated from the same facts.
-type CycleViews struct {
-	Cycle string
-	State string
-}
 
 type pendingViewFile struct {
 	target    string
@@ -25,202 +17,63 @@ type pendingViewFile struct {
 	mode      os.FileMode
 }
 
-// RenderCycleViews rebuilds Waves, the dependency graph, and the progress tree.
-func RenderCycleViews(cycleText, stateText string, stories map[string]Story) (CycleViews, error) {
-	if len(specdoc.ParseMarkdown(cycleText).Sections(3, "Dependency Waves")) != 1 {
-		return CycleViews{}, fmt.Errorf("Dependency Waves must have exactly one heading before syncing views")
+// RenderCycleViews builds the dependency graph and Cycle summary from current facts.
+func RenderCycleViews(cycleText string, stories map[string]Story) (string, error) {
+	if len(specdoc.ParseMarkdown(cycleText).Sections(2, "Acceptance Status")) != 1 {
+		return "", fmt.Errorf("Acceptance Status must have exactly one heading before syncing views")
 	}
-	if len(specdoc.ParseMarkdown(stateText).Sections(2, "Acceptance Status")) != 1 {
-		return CycleViews{}, fmt.Errorf("Acceptance Status must have exactly one heading before syncing views")
-	}
-
-	waves := readDependencyWaves(cycleText)
-	if err := requireCompletePlan(waves, stories); err != nil {
-		return CycleViews{}, err
-	}
-	grouped, err := groupDependencyWaves(waves, stories)
-	if err != nil {
-		return CycleViews{}, err
-	}
-	entries := flattenWaveEntries(grouped)
-	statuses := make(map[string]string)
-	for _, block := range extractAcceptanceBlocks(stateText) {
-		statuses[block.ID] = leadingToken(block.Fields["Acceptance"])
-	}
-
-	progressLines := make([]string, 0, len(entries))
-	for _, entry := range entries {
-		mark := " "
-		if statuses[entry.ID] == "accepted" {
-			mark = "x"
+	for id := range stories {
+		if !storyIDPattern.MatchString(id) {
+			return "", fmt.Errorf("invalid Story ID: %s", id)
 		}
-		progressLines = append(progressLines, "- ["+mark+"] "+entry.ID)
 	}
-
-	updatedCycle, err := specdoc.ParseMarkdown(cycleText).ReplaceSection(3, "Dependency Waves", renderDependencyWaves(grouped, stories))
+	order, err := orderedStoryIDs(stories)
 	if err != nil {
-		return CycleViews{}, err
+		return "", err
 	}
-	graph, err := renderDependencyGraph(entries, stories)
+	graph := renderDependencyGraph(order, stories, cycleText)
+	updated, err := specdoc.ParseMarkdown(cycleText).ReplaceSection(2, "Dependency Graph", graph)
 	if err != nil {
-		return CycleViews{}, err
+		return "", err
 	}
-	updatedCycle, err = specdoc.ParseMarkdown(updatedCycle).ReplaceSection(3, "Dependency Graph", graph)
-	if err != nil {
-		return CycleViews{}, err
-	}
-	updatedState, err := specdoc.ParseMarkdown(stateText).ReplaceSection(2, "Progress Tree", strings.Join(progressLines, "\n"))
-	if err != nil {
-		return CycleViews{}, err
-	}
-	return CycleViews{Cycle: updatedCycle, State: updatedState}, nil
+	return specdoc.ReplaceFrontmatterScalar(updated, "status", deriveCycleStatus(extractAcceptanceBlocks(updated), extractLaneBlocks(updated)))
 }
 
-func requireCompletePlan(waves []DependencyWave, stories map[string]Story) error {
-	seen := make(map[string]struct{})
-	for _, entry := range flattenWaveEntries(waves) {
-		if _, found := stories[entry.ID]; !found {
-			return fmt.Errorf("Dependency Waves must contain each Story exactly once: %s", entry.ID)
-		}
-		if _, duplicate := seen[entry.ID]; duplicate {
-			return fmt.Errorf("Dependency Waves must contain each Story exactly once: %s", entry.ID)
-		}
-		seen[entry.ID] = struct{}{}
-	}
-	for _, storyID := range sortedStoryIDs(stories) {
-		if _, found := seen[storyID]; !found {
-			return fmt.Errorf("Dependency Waves missing story: %s", storyID)
-		}
-	}
-	return nil
-}
-
-func groupDependencyWaves(waves []DependencyWave, stories map[string]Story) ([]DependencyWave, error) {
-	numbers, err := DependencyWaveNumbers(stories)
-	if err != nil {
-		return nil, err
-	}
-	grouped := make(map[int][]WaveEntry)
-	for _, entry := range flattenWaveEntries(waves) {
-		number, found := numbers[entry.ID]
-		if !found {
-			return nil, fmt.Errorf("Dependency Waves references missing story: %s", entry.ID)
-		}
-		grouped[number] = append(grouped[number], entry)
-	}
-	keys := make([]int, 0, len(grouped))
-	for number := range grouped {
-		keys = append(keys, number)
-	}
-	sort.Ints(keys)
-	result := make([]DependencyWave, 0, len(keys))
-	for _, number := range keys {
-		result = append(result, DependencyWave{Number: number, Entries: grouped[number]})
-	}
-	return result, nil
-}
-
-func flattenWaveEntries(waves []DependencyWave) []WaveEntry {
-	entries := make([]WaveEntry, 0)
-	for _, wave := range waves {
-		entries = append(entries, wave.Entries...)
-	}
-	return entries
-}
-
-func renderDependencyWaves(waves []DependencyWave, stories map[string]Story) string {
-	quote := string(rune(96))
-	sections := make([]string, 0, len(waves))
-	for _, wave := range waves {
-		lines := []string{fmt.Sprintf("#### Wave %d", wave.Number), ""}
-		for index, entry := range wave.Entries {
-			line := fmt.Sprintf("%d. %s%s%s: %s", index+1, quote, entry.ID, quote, stories[entry.ID].Title)
-			if note := waveEntryNote(entry.Tail); note != "" {
-				line += "; " + note
-			}
-			lines = append(lines, line)
-			notes := entry.Notes
-			for len(notes) > 0 && strings.TrimSpace(notes[0]) == "" {
-				notes = notes[1:]
-			}
-			for len(notes) > 0 && strings.TrimSpace(notes[len(notes)-1]) == "" {
-				notes = notes[:len(notes)-1]
-			}
-			if len(notes) > 0 {
-				lines = append(lines, "")
-				lines = append(lines, notes...)
-				if index < len(wave.Entries)-1 {
-					lines = append(lines, "")
-				}
-			}
-		}
-		sections = append(sections, strings.Join(lines, "\n"))
-	}
-	return strings.Join(sections, "\n\n")
-}
-
-func waveEntryNote(tail string) string {
-	tail = strings.TrimSpace(tail)
-	if separator := strings.IndexAny(tail, ";；"); separator >= 0 {
-		_, size := utf8.DecodeRuneInString(tail[separator:])
-		return strings.TrimSpace(tail[separator+size:])
-	}
-	if strings.HasPrefix(tail, ":") || strings.HasPrefix(tail, "：") {
-		return ""
-	}
-	return strings.TrimLeft(tail, ";； ")
-}
-
-func renderDependencyGraph(entries []WaveEntry, stories map[string]Story) (string, error) {
-	hasDependencies := false
-	for _, entry := range entries {
-		if len(stories[entry.ID].DependsOn) > 0 {
-			hasDependencies = true
-			break
-		}
-	}
-	if !hasDependencies {
-		return "- none", nil
-	}
-
-	type graphNode struct {
-		name  string
-		label string
-	}
-	nodes := make(map[string]graphNode)
+func renderDependencyGraph(order []string, stories map[string]Story, cycleText string) string {
+	nodes := make(map[string]string)
 	fence := strings.Repeat(string(rune(96)), 3)
 	lines := []string{fence + "mermaid", "flowchart TD"}
-	for _, entry := range entries {
-		number := entry.ID
-		if match := storyIDPattern.FindStringSubmatch(entry.ID); len(match) > 1 {
-			number = match[1]
-		}
-		name := strings.TrimRight(strings.TrimSpace(stories[entry.ID].Title), "。. ")
-		label := "S" + number
-		if name != "" {
-			label += " " + name
-		}
-		node := graphNode{name: "S" + number, label: label}
-		nodes[entry.ID] = node
-		lines = append(lines, "  "+node.name+"[\""+escapeMermaidLabel(node.label)+"\"]")
+	acceptance := extractAcceptanceBlocks(cycleText)
+	lanes := extractLaneBlocks(cycleText)
+	for _, id := range order {
+		number := storyIDPattern.FindStringSubmatch(id)[1]
+		name := "S" + number
+		nodes[id] = name
+		status := storyStatus(id, acceptance, lanes)
+		title := strings.TrimRight(strings.TrimSpace(stories[id].Title), "。. ")
+		label := "[" + string(status) + "] " + escapeMermaidLabel(name+" "+title)
+		lines = append(lines, "  "+name+"[\""+label+"\"]:::"+string(status))
 	}
-	lines = append(lines, "")
-	for _, entry := range entries {
-		dependencies := make(map[string]struct{})
-		for _, dependency := range MinimalDependencies(stories, entry.ID) {
-			if _, found := nodes[dependency]; !found {
-				return "", fmt.Errorf("story.depends_on references missing story: %s", dependency)
-			}
-			dependencies[dependency] = struct{}{}
+	for _, id := range order {
+		needed := make(map[string]bool)
+		for _, dependency := range MinimalDependencies(stories, id) {
+			needed[dependency] = true
 		}
-		for _, source := range entries {
-			if _, found := dependencies[source.ID]; found {
-				lines = append(lines, "  "+nodes[source.ID].name+" --> "+nodes[entry.ID].name)
+		for _, source := range order {
+			if needed[source] {
+				lines = append(lines, "  "+nodes[source]+" --> "+nodes[id])
 			}
 		}
 	}
-	lines = append(lines, fence)
-	return strings.Join(lines, "\n"), nil
+	lines = append(lines,
+		"  classDef pending fill:#f3f4f6,stroke:#6b7280,color:#111827",
+		"  classDef active fill:#dbeafe,stroke:#2563eb,color:#1e3a8a",
+		"  classDef blocked fill:#fee2e2,stroke:#dc2626,color:#7f1d1d",
+		"  classDef ready fill:#ede9fe,stroke:#7c3aed,color:#4c1d95",
+		"  classDef rejected fill:#fce7f3,stroke:#be185d,color:#831843",
+		"  classDef rework fill:#ffedd5,stroke:#ea580c,color:#7c2d12",
+		"  classDef accepted fill:#dcfce7,stroke:#16a34a,color:#14532d", fence)
+	return strings.Join(lines, "\n")
 }
 
 func escapeMermaidLabel(value string) string {

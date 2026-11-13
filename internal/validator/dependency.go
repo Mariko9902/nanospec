@@ -43,44 +43,40 @@ func MinimalDependencies(stories map[string]Story, storyID string) []string {
 	return result
 }
 
-// DependencyWaveNumbers assigns Waves from the longest prerequisite path.
-func DependencyWaveNumbers(stories map[string]Story) (map[string]int, error) {
-	waves := make(map[string]int)
-	visiting := make(map[string]struct{})
-	var visit func(string) (int, error)
-	visit = func(storyID string) (int, error) {
-		if wave, found := waves[storyID]; found {
-			return wave, nil
-		}
-		if _, found := visiting[storyID]; found {
-			return 0, fmt.Errorf("story dependency cycle detected at %s", storyID)
-		}
-		story, found := stories[storyID]
-		if !found {
-			return 0, fmt.Errorf("story dependency references missing story: %s", storyID)
-		}
-		visiting[storyID] = struct{}{}
-		wave := 1
-		for _, dependency := range uniqueStrings(story.DependsOn) {
-			dependencyWave, err := visit(dependency)
-			if err != nil {
-				return 0, err
-			}
-			if dependencyWave+1 > wave {
-				wave = dependencyWave + 1
-			}
-		}
-		delete(visiting, storyID)
-		waves[storyID] = wave
-		return wave, nil
+func orderedStoryIDs(stories map[string]Story) ([]string, error) {
+	remaining := make(map[string]bool, len(stories))
+	for id := range stories {
+		remaining[id] = true
 	}
-
-	for _, storyID := range sortedStoryIDs(stories) {
-		if _, err := visit(storyID); err != nil {
-			return nil, err
+	order := make([]string, 0, len(stories))
+	for len(remaining) > 0 {
+		next := ""
+		for _, id := range sortedStoryIDs(stories) {
+			if !remaining[id] {
+				continue
+			}
+			ready := true
+			for _, dependency := range stories[id].DependsOn {
+				if _, found := stories[dependency]; !found {
+					return nil, fmt.Errorf("story dependency references missing story: %s", dependency)
+				}
+				if remaining[dependency] {
+					ready = false
+					break
+				}
+			}
+			if ready {
+				next = id
+				break
+			}
 		}
+		if next == "" {
+			return nil, fmt.Errorf("story dependency cycle detected")
+		}
+		order = append(order, next)
+		delete(remaining, next)
 	}
-	return waves, nil
+	return order, nil
 }
 
 func validateStoryGraph(stories map[string]Story, report *diagnostic.Report) {

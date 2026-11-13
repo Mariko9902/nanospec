@@ -9,16 +9,17 @@ import (
 	"nanospec/internal/validator"
 )
 
-const evidenceHelp = "Usage: nanospec evidence --implemented-by <id> --acceptance <id> --observed <text> --command <text> --result <text> --artifacts <text> --context <text> <story>\n\n" +
-	"Create or replace current evidence for one Acceptance ID."
+const evidenceHelp = "Usage: nanospec evidence --spec-revision <rev-N> --implemented-by <id> --acceptance <id> --observed <text> --command <text> --result <text> --artifacts <text> --context <json> <story>\n\n" +
+	"Create or replace current evidence for one Acceptance ID.\n" +
+	"Context JSON requires spec_revision, code_revision, environment and observed_at."
 
-const verifyHelp = "Usage: nanospec verify --verified-by <id> --mode <self|independent> --result <pass|rework> <story>\n\n" +
+const verifyHelp = "Usage: nanospec verify --spec-revision <rev-N> --verified-by <id> --mode <self|independent> --result <pass|rework> <story>\n\n" +
 	"Record a complete review result for the explicitly selected Story."
 
-const acceptHelp = "Usage: nanospec accept --accepted-by <id> --method <human|verified> <story>\n\n" +
+const acceptHelp = "Usage: nanospec accept --spec-revision <rev-N> --accepted-by <id> --method <human|verified> <story>\n\n" +
 	"After explicit acceptance authority is established, freeze passed evidence as acceptance/outcome.md."
 
-const rejectHelp = "Usage: nanospec reject --rejected-by <id> --reason <text> <story>\n\n" +
+const rejectHelp = "Usage: nanospec reject --spec-revision <rev-N> --rejected-by <id> --reason <text> <story>\n\n" +
 	"Reject a ready delivery and return its evidence to rework."
 
 func runEvidence(args []string, stdout, stderr io.Writer) int {
@@ -27,6 +28,7 @@ func runEvidence(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 	flags := flag.NewFlagSet("evidence", flag.ContinueOnError)
+	specRevision := flags.String("spec-revision", "", "")
 	flags.SetOutput(io.Discard)
 	implementedBy := flags.String("implemented-by", "", "")
 	acceptance := flags.String("acceptance", "", "")
@@ -40,6 +42,7 @@ func runEvidence(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	result, validation := validator.RecordStoryEvidence(flags.Args()[0], validator.EvidenceCaptureRequest{
+		SpecRevision:  *specRevision,
 		ImplementedBy: *implementedBy, AcceptanceID: *acceptance, Observed: *observed,
 		Command: *command, Result: *resultText, Artifacts: *artifacts, Context: *context, At: time.Now(),
 	})
@@ -56,6 +59,7 @@ func runVerify(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 	flags := flag.NewFlagSet("verify", flag.ContinueOnError)
+	specRevision := flags.String("spec-revision", "", "")
 	flags.SetOutput(io.Discard)
 	verifiedBy := flags.String("verified-by", "", "")
 	mode := flags.String("mode", "", "")
@@ -65,7 +69,8 @@ func runVerify(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	result, validation := validator.VerifyStory(flags.Args()[0], validator.VerificationRequest{
-		VerifiedBy: *verifiedBy, Mode: validator.VerificationMode(*mode), Result: *resultText, At: time.Now(),
+		SpecRevision: *specRevision,
+		VerifiedBy:   *verifiedBy, Mode: validator.VerificationMode(*mode), Result: *resultText, At: time.Now(),
 	})
 	if code := reportQueryResult(validation, stderr); code != 0 {
 		return code
@@ -80,6 +85,7 @@ func runAccept(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 	flags := flag.NewFlagSet("accept", flag.ContinueOnError)
+	specRevision := flags.String("spec-revision", "", "")
 	flags.SetOutput(io.Discard)
 	acceptedBy := flags.String("accepted-by", "", "")
 	method := flags.String("method", "", "")
@@ -88,7 +94,8 @@ func runAccept(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	result, validation := validator.AcceptStory(flags.Args()[0], validator.AcceptanceRequest{
-		AcceptedBy: *acceptedBy, Method: validator.AcceptancePolicy(*method), At: time.Now(),
+		SpecRevision: *specRevision,
+		AcceptedBy:   *acceptedBy, Method: validator.AcceptancePolicy(*method), At: time.Now(),
 	})
 	if code := reportQueryResult(validation, stderr); code != 0 {
 		return code
@@ -103,6 +110,7 @@ func runReject(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 	flags := flag.NewFlagSet("reject", flag.ContinueOnError)
+	specRevision := flags.String("spec-revision", "", "")
 	flags.SetOutput(io.Discard)
 	rejectedBy := flags.String("rejected-by", "", "")
 	reason := flags.String("reason", "", "")
@@ -111,7 +119,8 @@ func runReject(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	result, validation := validator.RejectStory(flags.Args()[0], validator.RejectionRequest{
-		RejectedBy: *rejectedBy, Reason: *reason, At: time.Now(),
+		SpecRevision: *specRevision,
+		RejectedBy:   *rejectedBy, Reason: *reason, At: time.Now(),
 	})
 	if code := reportQueryResult(validation, stderr); code != 0 {
 		return code

@@ -16,7 +16,7 @@ Both depths use the same format, Story identity, dependencies, Acceptance Flow, 
 
 Read project rules and product context. Check actual code, data, entries, configuration, and behavior. Identify deliverable results and the rules needed for each. Then choose boundaries and blocking dependencies, build the Cycle order, and assign Story IDs. Write a complete local definition for each Story. Add a brief only when there are repository findings worth handing over.
 
-Use `story-NN-<slug>`. The number is a stable handle, not an encoding of priority or dependency. For a new Cycle, assign it after boundaries and the first Wave order are clear. Once implementation or verification facts exist, keep the number. A later order change does not renumber work. A meaning-preserving repartition of entirely unstarted work follows the [change rules](./spec-change-rules.md#repartitioning-unstarted-stories).
+Use `story-NN-<slug>`. The number is a stable handle, not an encoding of priority or dependency. For a new Cycle, assign it after boundaries and the initial dependency order are clear. Once implementation or verification facts exist, keep the number. A later order change does not renumber work. A meaning-preserving repartition of entirely unstarted work follows the [change rules](./spec-change-rules.md#repartitioning-unstarted-stories).
 
 ### A Story is one deliverable result
 
@@ -54,30 +54,7 @@ Keep the Story list, dependencies, possible parallel work, priority, coordinatio
 
 A prerequisite must be verified and available. It need not be human-accepted unless an explicit requirement says so. See [dependency readiness](./execution-rules.md#dependency-readiness).
 
-For example:
-
-```md
-#### Wave 1
-
-1. `story-01-customer`: Customer records; start first to make address entry available sooner.
-2. `story-02-product`: Product records
-
-#### Wave 2
-
-1. `story-03-address`: Delivery addresses
-2. `story-04-favorite`: Saved products
-
-#### Wave 3
-
-1. `story-05-order`: Order placement; start when customer, product, and address results are ready, without waiting for saved products.
-
-#### Wave 4
-
-1. `story-06-review`: Product reviews
-2. `story-07-refund`: Refunds
-```
-
-Customer and product work can run in parallel. Their order can still show a preference. Order placement waits for the results it needs, not every earlier Wave item.
+For example, order placement depends on customer, product, and delivery-address results. Customer and product work can run in parallel. Order placement can begin once its own prerequisites are ready, even while an unrelated saved-products feature remains unfinished. Put a useful priority such as starting customer records first in Planning Context.
 
 A review feature needs customer and product records because reviews refer to them. If only completed purchasers may review, it also needs the relevant order result. The business fact establishes the dependency.
 
@@ -137,11 +114,11 @@ Do not copy the pool or make the executor reread it to understand the Story.
 ### Step 4: Build the Cycle
 
 1. Build the candidate dependency DAG from actual blocking facts.
-2. Choose priority within each dependency level using the main path, unlocked value, early risk discovery, feedback, workload, and available resources.
-3. For a new Cycle, assign formal IDs in the initial Wave order and replace temporary references. Keep existing IDs in an established Cycle, except for an eligible unstarted repartition.
-4. List every Story in Dependency Waves. A flat ordered list is enough for the first draft; the CLI generates Wave headings.
-5. Add a non-obvious coordination reason after a semicolon or in a paragraph beneath the entry.
-6. Keep the Dependency Graph heading and generate its contents after the state draft exists.
+2. Choose priority among eligible Stories using the main path, unlocked value, early risk discovery, feedback, workload, and available resources.
+3. For a new Cycle, assign formal IDs in the initial dependency order and replace temporary references. Keep existing IDs in an established Cycle, except for an eligible unstarted repartition.
+4. Create every Story directory; the CLI discovers Cycle membership from those directories.
+5. Put non-obvious priorities and coordination constraints in Planning Context.
+6. Keep the Dependency Graph heading and generate its contents after drafting the Cycle execution facts.
 7. Explain a useful priority change without renumbering Stories.
 
 The Cycle plan lists work, possible parallelism, and coordination. The graph shows the smallest set of edges with the same reachability. Neither repeats Story definitions or acceptance.
@@ -176,9 +153,9 @@ A contract that constrains delivery belongs in the Story or project rules. A cod
 
 ### Step 7: Create state
 
-Give every Story an Acceptance Status block. Start at `rev-1`, usually with Cycle status `active`, unchecked progress, and `pending` acceptance. Record actual initial facts or `none` for the situation and issues. Active Lanes is `none` until execution starts; a Lane's Next then holds its recovery action.
+Keep execution facts in `cycle.md`, with exactly one Acceptance Status block for every Story. Start at `rev-1`, usually with Cycle status `active` and `pending` acceptance. Record actual initial facts or `none` for the situation and issues. Active Lanes is `none` until execution starts; a Lane's Next then holds its recovery action.
 
-Run `nanospec validate --sync-views <cycle-dir>` to check the draft and generate Waves, graph, and progress. Keep operation rules out of state. Execution starts through `nanospec prepare`, which includes the execution rules and selected context.
+Run `nanospec validate --sync-views <cycle-dir>` to check the draft and generate the dependency graph and status labels. Keep operation rules out of state. Execution starts through `nanospec prepare`, which includes the execution rules and selected context.
 
 ### Step 8: Review independently
 

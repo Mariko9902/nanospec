@@ -16,7 +16,7 @@ func TestEvidenceVerificationAndHumanAcceptanceLifecycle(t *testing.T) {
 
 	captureAcceptance(t, target, "A1", at.Add(time.Minute))
 	captureAcceptance(t, target, "A2", at.Add(2*time.Minute))
-	verification, result := BuildVerificationUpdate(target, VerificationRequest{
+	verification, result := BuildVerificationUpdate(target, VerificationRequest{SpecRevision: "rev-1",
 		VerifiedBy: "executor-a", Mode: VerificationSelf, Result: "pass", At: at.Add(3 * time.Minute),
 	})
 	if result.InputError != "" || len(result.Errors) != 0 {
@@ -26,7 +26,7 @@ func TestEvidenceVerificationAndHumanAcceptanceLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	commit, result := BuildAcceptanceCommit(target, AcceptanceRequest{
+	commit, result := BuildAcceptanceCommit(target, AcceptanceRequest{SpecRevision: "rev-1",
 		AcceptedBy: "product-owner", Method: AcceptanceHuman, At: at.Add(4 * time.Minute),
 	})
 	if result.InputError != "" || len(result.Errors) != 0 {
@@ -45,7 +45,7 @@ func TestEvidenceVerificationAndHumanAcceptanceLifecycle(t *testing.T) {
 	}
 	for _, fragment := range []string{
 		"spec_rev: rev-1", "story_digest: " + storyContentDigest(storySource),
-		"Verification Context: rev and environment at " + at.Add(time.Minute).Format(time.RFC3339),
+		"Verification Context: " + testObservationContext("rev-1", at.Add(2*time.Minute)),
 		"verification_mode: self", "verified_acceptance: [A1, A2]", "first_pass: true",
 		"accepted_by: product-owner", "acceptance_method: human", "- A1: confirmed", "- A2: confirmed",
 	} {
@@ -53,8 +53,8 @@ func TestEvidenceVerificationAndHumanAcceptanceLifecycle(t *testing.T) {
 			t.Fatalf("outcome missing %q:\n%s", fragment, outcome)
 		}
 	}
-	state := readTestFile(t, filepath.Join(cycleDirectory, "execution-state.md"))
-	for _, fragment := range []string{"status: done", "- [x] story-01-base", "Acceptance: accepted:", "## Active Lanes\n\n- none"} {
+	state := readTestFile(t, filepath.Join(cycleDirectory, "cycle.md"))
+	for _, fragment := range []string{"status: done", "[accepted] S01", "Acceptance: accepted:", "## Active Lanes\n\n- none"} {
 		if !strings.Contains(state, fragment) {
 			t.Fatalf("state missing %q:\n%s", fragment, state)
 		}
@@ -71,7 +71,7 @@ func TestAcceptedStoryMutationBreaksOutcomeBinding(t *testing.T) {
 	checkpointStoryDone(t, target, at)
 	captureAcceptance(t, target, "A1", at.Add(time.Minute))
 	captureAcceptance(t, target, "A2", at.Add(2*time.Minute))
-	verification, result := BuildVerificationUpdate(target, VerificationRequest{
+	verification, result := BuildVerificationUpdate(target, VerificationRequest{SpecRevision: "rev-1",
 		VerifiedBy: "executor-a", Mode: VerificationSelf, Result: "pass", At: at.Add(3 * time.Minute),
 	})
 	if result.InputError != "" || len(result.Errors) != 0 {
@@ -80,7 +80,7 @@ func TestAcceptedStoryMutationBreaksOutcomeBinding(t *testing.T) {
 	if err := SaveViewUpdates(verification.Updates); err != nil {
 		t.Fatal(err)
 	}
-	commit, result := BuildAcceptanceCommit(target, AcceptanceRequest{
+	commit, result := BuildAcceptanceCommit(target, AcceptanceRequest{SpecRevision: "rev-1",
 		AcceptedBy: "product-owner", Method: AcceptanceHuman, At: at.Add(4 * time.Minute),
 	})
 	if result.InputError != "" || len(result.Errors) != 0 {
@@ -124,8 +124,12 @@ func TestRevisionMakesExistingEvidenceStale(t *testing.T) {
 		t.Fatalf("errors = %#v", validated.Errors)
 	}
 
+	checkpoint, checked := SaveStoryCheckpoint(target, CheckpointRequest{SpecRevision: "rev-2", Owner: "executor-a", Status: "active", Complete: true, Next: "none", Situation: "revised result implemented", At: at.Add(4 * time.Minute)})
+	if checked.InputError != "" || len(checked.Errors) > 0 || checkpoint.Status != "active" {
+		t.Fatalf("resume: %#v", checked)
+	}
 	captureAcceptance(t, target, "A1", at.Add(4*time.Minute))
-	_, result = BuildVerificationUpdate(target, VerificationRequest{
+	_, result = BuildVerificationUpdate(target, VerificationRequest{SpecRevision: "rev-2",
 		VerifiedBy: "executor-a", Mode: VerificationSelf, Result: "pass", At: at.Add(5 * time.Minute),
 	})
 	if !strings.Contains(result.InputError, "current evidence for A2") {
@@ -134,7 +138,7 @@ func TestRevisionMakesExistingEvidenceStale(t *testing.T) {
 }
 
 func TestEvidenceRejectsNonCanonicalAcceptanceID(t *testing.T) {
-	_, result := BuildEvidenceUpdate("unused", EvidenceCaptureRequest{
+	_, result := BuildEvidenceUpdate("unused", EvidenceCaptureRequest{SpecRevision: "rev-1",
 		ImplementedBy: "executor-a", AcceptanceID: "QA1", Observed: "observed", Command: "check",
 		Result: "passed", Artifacts: "artifact", Context: "context", At: time.Now(),
 	})
@@ -178,7 +182,7 @@ func TestRevisionCarriesUnaffectedEvidenceToNewCycleRevision(t *testing.T) {
 	}
 	verification, verified := BuildVerificationUpdate(
 		filepath.Join(cycleDirectory, "story-02-help"),
-		VerificationRequest{VerifiedBy: "executor-a", Mode: VerificationSelf, Result: "pass", At: at.Add(4 * time.Minute)},
+		VerificationRequest{SpecRevision: "rev-2", VerifiedBy: "executor-a", Mode: VerificationSelf, Result: "pass", At: at.Add(4 * time.Minute)},
 	)
 	if verified.InputError != "" || len(verified.Errors) != 0 || verification.Status != "passed" {
 		t.Fatalf("verification = %#v, result = %#v", verification, verified)
@@ -224,7 +228,7 @@ func TestReworkIsCountedAndNewEvidenceResetsReviewState(t *testing.T) {
 	checkpointStoryDone(t, target, at)
 	captureAcceptance(t, target, "A1", at.Add(time.Minute))
 
-	verification, result := BuildVerificationUpdate(target, VerificationRequest{
+	verification, result := BuildVerificationUpdate(target, VerificationRequest{SpecRevision: "rev-1",
 		VerifiedBy: "reviewer", Mode: VerificationIndependent, Result: "rework", At: at.Add(2 * time.Minute),
 	})
 	if result.InputError != "" || len(result.Errors) != 0 || verification.ReworkCount != 1 {
@@ -233,6 +237,7 @@ func TestReworkIsCountedAndNewEvidenceResetsReviewState(t *testing.T) {
 	if err := SaveViewUpdates(verification.Updates); err != nil {
 		t.Fatal(err)
 	}
+	startTestRework(t, target, "rev-1", at.Add(3*time.Minute))
 	captureAcceptance(t, target, "A1", at.Add(3*time.Minute))
 	evidence := readTestFile(t, filepath.Join(target, "acceptance", "evidence.md"))
 	for _, fragment := range []string{"verification_status: pending", "verified_by: none", "first_pass: false", "rework_count: 1"} {
@@ -249,7 +254,7 @@ func TestAcceptanceRejectionReturnsReadyDeliveryToRework(t *testing.T) {
 	checkpointStoryDone(t, target, at)
 	captureAcceptance(t, target, "A1", at.Add(time.Minute))
 	captureAcceptance(t, target, "A2", at.Add(2*time.Minute))
-	verification, result := BuildVerificationUpdate(target, VerificationRequest{
+	verification, result := BuildVerificationUpdate(target, VerificationRequest{SpecRevision: "rev-1",
 		VerifiedBy: "executor-a", Mode: VerificationSelf, Result: "pass", At: at.Add(3 * time.Minute),
 	})
 	if result.InputError != "" || len(result.Errors) != 0 {
@@ -259,7 +264,7 @@ func TestAcceptanceRejectionReturnsReadyDeliveryToRework(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rejection, result := BuildRejectionUpdate(target, RejectionRequest{
+	rejection, result := BuildRejectionUpdate(target, RejectionRequest{SpecRevision: "rev-1",
 		RejectedBy: "product-owner", Reason: "failure state is unclear", At: at.Add(4 * time.Minute),
 	})
 	if result.InputError != "" || len(result.Errors) != 0 || rejection.ReworkCount != 1 {
@@ -269,20 +274,21 @@ func TestAcceptanceRejectionReturnsReadyDeliveryToRework(t *testing.T) {
 		t.Fatal(err)
 	}
 	evidence := readTestFile(t, filepath.Join(target, "acceptance", "evidence.md"))
-	state := readTestFile(t, filepath.Join(cycleDirectory, "execution-state.md"))
+	state := readTestFile(t, filepath.Join(cycleDirectory, "cycle.md"))
 	for _, fragment := range []string{"verification_status: rework", "rework_count: 1", "- A1: observed", "- A2: observed"} {
 		if !strings.Contains(evidence, fragment) {
 			t.Fatalf("evidence missing %q:\n%s", fragment, evidence)
 		}
 	}
-	for _, fragment := range []string{"Acceptance: rejected: rejected_by product-owner; failure state is unclear; acceptance/evidence.md", "Status: paused", "Next: Address rejection: failure state is unclear"} {
+	for _, fragment := range []string{"Acceptance: rejected: rejected_by product-owner; failure state is unclear; acceptance/evidence.md", "Status: rejected", "Next: Await rework assignment; failure state is unclear"} {
 		if !strings.Contains(state, fragment) {
 			t.Fatalf("state missing %q:\n%s", fragment, state)
 		}
 	}
 
+	startTestRework(t, target, "rev-1", at.Add(5*time.Minute))
 	captureAcceptance(t, target, "A1", at.Add(5*time.Minute))
-	state = readTestFile(t, filepath.Join(cycleDirectory, "execution-state.md"))
+	state = readTestFile(t, filepath.Join(cycleDirectory, "cycle.md"))
 	if !strings.Contains(state, "Acceptance: pending: acceptance/evidence.md updated for A1") {
 		t.Fatalf("state did not return to pending:\n%s", state)
 	}
@@ -304,7 +310,7 @@ acceptance_review: independent-full-coverage
 	checkpointStoryDone(t, target, at)
 	captureAcceptance(t, target, "A1", at.Add(time.Minute))
 	captureAcceptance(t, target, "A2", at.Add(2*time.Minute))
-	verification, result := BuildVerificationUpdate(target, VerificationRequest{
+	verification, result := BuildVerificationUpdate(target, VerificationRequest{SpecRevision: "rev-1",
 		VerifiedBy: "executor-a", Mode: VerificationSelf, Result: "pass", At: at.Add(3 * time.Minute),
 	})
 	if result.InputError != "" || len(result.Errors) != 0 {
@@ -314,7 +320,7 @@ acceptance_review: independent-full-coverage
 		t.Fatal(err)
 	}
 
-	_, result = BuildAcceptanceCommit(target, AcceptanceRequest{
+	_, result = BuildAcceptanceCommit(target, AcceptanceRequest{SpecRevision: "rev-1",
 		AcceptedBy: "executor-a", Method: AcceptanceVerified, At: at.Add(4 * time.Minute),
 	})
 	if !strings.Contains(result.InputError, "independent verification") {
@@ -329,7 +335,7 @@ func TestSaveAcceptanceCommitRestoresEvidenceWhenStateChanged(t *testing.T) {
 	checkpointStoryDone(t, target, at)
 	captureAcceptance(t, target, "A1", at.Add(time.Minute))
 	captureAcceptance(t, target, "A2", at.Add(2*time.Minute))
-	verification, result := BuildVerificationUpdate(target, VerificationRequest{
+	verification, result := BuildVerificationUpdate(target, VerificationRequest{SpecRevision: "rev-1",
 		VerifiedBy: "executor-a", Mode: VerificationSelf, Result: "pass", At: at.Add(3 * time.Minute),
 	})
 	if result.InputError != "" || len(result.Errors) != 0 {
@@ -338,15 +344,15 @@ func TestSaveAcceptanceCommitRestoresEvidenceWhenStateChanged(t *testing.T) {
 	if err := SaveViewUpdates(verification.Updates); err != nil {
 		t.Fatal(err)
 	}
-	commit, result := BuildAcceptanceCommit(target, AcceptanceRequest{
+	commit, result := BuildAcceptanceCommit(target, AcceptanceRequest{SpecRevision: "rev-1",
 		AcceptedBy: "product-owner", Method: AcceptanceHuman, At: at.Add(4 * time.Minute),
 	})
 	if result.InputError != "" || len(result.Errors) != 0 {
 		t.Fatalf("acceptance result = %#v", result)
 	}
-	stateFile := filepath.Join(cycleDirectory, "execution-state.md")
+	stateFile := filepath.Join(cycleDirectory, "cycle.md")
 	state := readTestFile(t, stateFile)
-	writeFixtureFile(t, stateFile, strings.Replace(state, "status: active", "status: paused", 1))
+	writeFixtureFile(t, stateFile, strings.Replace(state, "status: active", "status: unknown", 1))
 
 	if err := SaveAcceptanceCommit(commit); err == nil {
 		t.Fatal("expected stale state failure")
@@ -361,8 +367,8 @@ func TestSaveAcceptanceCommitRestoresEvidenceWhenStateChanged(t *testing.T) {
 
 func checkpointStoryDone(t *testing.T, target string, at time.Time) {
 	t.Helper()
-	checkpoint, result := BuildCheckpointUpdate(target, CheckpointRequest{
-		Owner: "executor-a", Status: "done", Next: "none", Situation: "implementation complete", At: at,
+	checkpoint, result := BuildCheckpointUpdate(target, CheckpointRequest{SpecRevision: "rev-1",
+		Owner: "executor-a", Status: "active", Complete: true, Next: "none", Situation: "implementation complete", At: at,
 	})
 	if result.InputError != "" || len(result.Errors) != 0 {
 		t.Fatalf("checkpoint result = %#v", result)
@@ -374,11 +380,15 @@ func checkpointStoryDone(t *testing.T, target string, at time.Time) {
 
 func captureAcceptance(t *testing.T, target, acceptanceID string, at time.Time) {
 	t.Helper()
-	capture, result := BuildEvidenceUpdate(target, EvidenceCaptureRequest{
+	snapshot, validation := LoadCycleSnapshot(filepath.Dir(target))
+	if validation.InputError != "" || len(validation.Errors) > 0 {
+		t.Fatalf("prepare capture: %#v", validation)
+	}
+	capture, result := BuildEvidenceUpdate(target, EvidenceCaptureRequest{SpecRevision: snapshot.SpecRevision,
 		ImplementedBy: "executor-a", AcceptanceID: acceptanceID,
 		Observed: "observed " + acceptanceID, Command: "go test ./...", Result: "passed " + acceptanceID,
 		Artifacts: "artifacts/" + strings.ToLower(acceptanceID) + ".txt",
-		Context:   "rev and environment at " + at.Format(time.RFC3339), At: at,
+		Context:   testObservationContext(snapshot.SpecRevision, at), At: at,
 	})
 	if result.InputError != "" || len(result.Errors) != 0 {
 		t.Fatalf("capture result = %#v", result)

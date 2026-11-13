@@ -1,6 +1,7 @@
 package specdoc
 
 import (
+	"fmt"
 	"regexp"
 	"sort"
 	"strings"
@@ -119,6 +120,25 @@ func ParseDocument(file, source string, report *diagnostic.Report) Document {
 		Frontmatter: parseFrontmatter(metadataSource),
 		Body:        source[location[1]:],
 	}
+}
+
+// ReplaceFrontmatterScalar updates one metadata field while preserving the body.
+func ReplaceFrontmatterScalar(source, key, value string) (string, error) {
+	location := frontmatterPattern.FindStringSubmatchIndex(source)
+	if location == nil {
+		return "", fmt.Errorf("missing YAML frontmatter")
+	}
+	if strings.ContainsAny(value, "\r\n") {
+		return "", fmt.Errorf("frontmatter value must be one line")
+	}
+	metadata := source[location[2]:location[3]]
+	pattern := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(key) + `:[^\r\n]*`)
+	matches := pattern.FindAllStringIndex(metadata, -1)
+	if len(matches) != 1 {
+		return "", fmt.Errorf("frontmatter must contain exactly one %s field", key)
+	}
+	start, end := location[2]+matches[0][0], location[2]+matches[0][1]
+	return source[:start] + key + ": " + value + source[end:], nil
 }
 
 func parseFrontmatter(source string) Frontmatter {

@@ -43,7 +43,7 @@ Keep other content where it belongs:
 
 - Requirements, business rules, acceptance conditions, and scope: `story.md`.
 - Temporary implementation steps: the executor's current plan.
-- Execution progress and recovery: `execution-state.md`.
+- Execution progress and recovery: `cycle.md`.
 - PRD, Cycle, project rules, and other source material: their original files.
 - Ordinary entry-point discovery: the executing agent's repository investigation.
 

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"nanospec/internal/diagnostic"
+	"nanospec/internal/specdoc"
 )
 
 // AcceptanceCommit holds the evidence and state changes needed to freeze a delivery.
@@ -36,6 +37,9 @@ func BuildAcceptanceCommit(target string, request AcceptanceRequest) (Acceptance
 	if result.InputError != "" || len(result.Errors) > 0 {
 		return AcceptanceCommit{}, result
 	}
+	if inputError := validatePreparedRevision(request.SpecRevision, snapshot.SpecRevision); inputError != "" {
+		return AcceptanceCommit{}, ValidationResult{InputError: inputError}
+	}
 	storyID := filepath.Base(storyDirectory)
 	story, found := snapshot.Stories[storyID]
 	if !found {
@@ -44,7 +48,7 @@ func BuildAcceptanceCommit(target string, request AcceptanceRequest) (Acceptance
 	if story.HasOutcome || acceptanceState(story.ID, snapshot.Acceptance) == "accepted" {
 		return AcceptanceCommit{}, ValidationResult{InputError: "accepted Story is frozen: " + story.ID}
 	}
-	if acceptanceState(story.ID, snapshot.Acceptance) != "ready" {
+	if storyStatus(story.ID, snapshot.Acceptance, snapshot.ActiveLanes) != StoryReady {
 		return AcceptanceCommit{}, ValidationResult{InputError: "acceptance requires ready verification state"}
 	}
 	if inputError := validateExecutionGate(story, snapshot); inputError != "" {
@@ -59,8 +63,8 @@ func BuildAcceptanceCommit(target string, request AcceptanceRequest) (Acceptance
 		return AcceptanceCommit{}, ValidationResult{InputError: "acceptance requires passed evidence for the current specification revision"}
 	}
 	lane, found := storyLane(story.ID, snapshot.ActiveLanes)
-	if !found || lane.Fields["Status"] != "done" || record.SpecChangeCount != laneSpecChanges(lane) {
-		return AcceptanceCommit{}, ValidationResult{InputError: "acceptance requires a matching done checkpoint"}
+	if !found || !implementationComplete(lane) || record.SpecChangeCount != laneSpecChanges(lane) {
+		return AcceptanceCommit{}, ValidationResult{InputError: "acceptance requires a matching complete checkpoint"}
 	}
 	if request.Method == AcceptanceVerified {
 		if story.AcceptancePolicy != AcceptanceVerified {
@@ -86,7 +90,7 @@ func BuildAcceptanceCommit(target string, request AcceptanceRequest) (Acceptance
 		return AcceptanceCommit{}, ValidationResult{Errors: errors, Warnings: outcomeReport.Warnings()}
 	}
 
-	state, err := updateAcceptanceState(snapshot.StateText, story.ID, "accepted: all Acceptance confirmed; acceptance/outcome.md; accepted_by "+request.AcceptedBy+" ("+string(request.Method)+")")
+	state, err := updateAcceptanceState(snapshot.CycleText, story.ID, "accepted: all Acceptance confirmed; acceptance/outcome.md; accepted_by "+request.AcceptedBy+" ("+string(request.Method)+")")
 	if err == nil {
 		state, err = updateManagedStateLine(state, "Current Situation", story.ID, "")
 	}
@@ -97,7 +101,7 @@ func BuildAcceptanceCommit(target string, request AcceptanceRequest) (Acceptance
 		state, err = removeStoryLane(state, story.ID)
 	}
 	if err == nil {
-		state, err = replaceFrontmatterScalar(state, "last_updated_at", request.At.Format(time.RFC3339))
+		state, err = specdoc.ReplaceFrontmatterScalar(state, "last_updated_at", request.At.Format(time.RFC3339))
 	}
 	if err != nil {
 		return AcceptanceCommit{}, ValidationResult{InputError: err.Error()}
@@ -106,26 +110,18 @@ func BuildAcceptanceCommit(target string, request AcceptanceRequest) (Acceptance
 	acceptedStory := stories[story.ID]
 	acceptedStory.HasOutcome = true
 	stories[story.ID] = acceptedStory
-	views, err := RenderCycleViews(snapshot.CycleText, state, stories)
-	if err != nil {
-		return AcceptanceCommit{}, ValidationResult{InputError: err.Error()}
-	}
-	state = views.State
-	if allStoriesAccepted(state, stories) {
-		state, err = replaceFrontmatterScalar(state, "status", "done")
-		if err != nil {
-			return AcceptanceCommit{}, ValidationResult{InputError: err.Error()}
-		}
-	}
-	stateFile := filepath.Join(snapshot.Directory, "execution-state.md")
-	if validation := validateUpdatedStateWithStories(stateFile, snapshot.ID, stories, state); validation.InputError != "" || len(validation.Errors) > 0 {
+
+	stateFile := filepath.Join(snapshot.Directory, "cycle.md")
+	var validation ValidationResult
+	state, validation = canonicalizeCycleState(stateFile, snapshot.ID, stories, state)
+	if validation.InputError != "" || len(validation.Errors) > 0 {
 		return AcceptanceCommit{}, validation
 	}
 	return AcceptanceCommit{
 		CycleID: snapshot.ID, StoryID: story.ID, EvidenceFile: evidenceFile, OutcomeFile: outcomeFile,
 		StoryFile: story.File, StoryDigest: storyDigest,
 		EvidenceBefore: evidenceBefore, OutcomeContent: outcome,
-		StateUpdate: ViewUpdate{File: stateFile, Before: snapshot.StateText, After: state},
+		StateUpdate: ViewUpdate{File: stateFile, Before: snapshot.CycleText, After: state},
 	}, ValidationResult{}
 }
 

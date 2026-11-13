@@ -9,42 +9,20 @@ import (
 	"nanospec/internal/specdoc"
 )
 
-type progressItem struct {
-	id   string
-	done bool
-}
-
 type feedbackBlock struct {
 	problem string
 	fields  map[string]string
 }
 
 var (
-	progressPattern     = regexp.MustCompile(`^\s*-\s+\[([ xX])\]\s+(story-\S+)\s*$`)
-	unsupportedProgress = regexp.MustCompile(`^\s*-\s+\[[ xX]\]\s+(\S+)\s*$`)
-	storyBlockPattern   = regexp.MustCompile(`^\s*-\s+Story:\s*(story-\S+)\s*$`)
-	laneBlockPattern    = regexp.MustCompile(`^\s*-\s+Lane:\s*(\S+)\s*$`)
-	blockFieldPattern   = regexp.MustCompile(`^\s+-\s+([A-Za-z][A-Za-z ]*):\s*(.*?)\s*$`)
-	feedbackProblem     = regexp.MustCompile(`^\s*-\s+Observed Problem:\s*(.*?)\s*$`)
-	feedbackField       = regexp.MustCompile(`^\s+-\s+(Spec Impact|Proposed Fix|Status):\s*(.*?)\s*$`)
-	laneIDPattern       = regexp.MustCompile(`^lane-\d{2}(?:-[a-z0-9][a-z0-9-]*)?$`)
-	revisionPattern     = regexp.MustCompile(`^rev-[1-9]\d*$`)
+	storyBlockPattern = regexp.MustCompile(`^\s*-\s+Story:\s*(story-\S+)\s*$`)
+	laneBlockPattern  = regexp.MustCompile(`^\s*-\s+Lane:\s*(\S+)\s*$`)
+	blockFieldPattern = regexp.MustCompile(`^\s+-\s+([A-Za-z][A-Za-z ]*):\s*(.*?)\s*$`)
+	feedbackProblem   = regexp.MustCompile(`^\s*-\s+Observed Problem:\s*(.*?)\s*$`)
+	feedbackField     = regexp.MustCompile(`^\s+-\s+(Spec Impact|Proposed Fix|Status):\s*(.*?)\s*$`)
+	laneIDPattern     = regexp.MustCompile(`^lane-\d{2}(?:-[a-z0-9][a-z0-9-]*)?$`)
+	revisionPattern   = regexp.MustCompile(`^rev-[1-9]\d*$`)
 )
-
-func extractProgress(file, body string, report *diagnostic.Report) []progressItem {
-	content := sectionContent(body, 2, "Progress Tree")
-	items := make([]progressItem, 0)
-	for _, line := range strings.Split(strings.ReplaceAll(content, "\r\n", "\n"), "\n") {
-		if match := progressPattern.FindStringSubmatch(line); match != nil {
-			items = append(items, progressItem{id: match[2], done: strings.EqualFold(match[1], "x")})
-			continue
-		}
-		if match := unsupportedProgress.FindStringSubmatch(line); match != nil {
-			report.AddError(file, "Progress Tree contains unsupported node: "+match[1])
-		}
-	}
-	return items
-}
 
 func extractAcceptanceBlocks(body string) []FieldBlock {
 	return extractFieldBlocks(sectionContent(body, 2, "Acceptance Status"), storyBlockPattern)
@@ -100,8 +78,7 @@ func validateActiveLanes(file, body string, stories map[string]Story, cycleStatu
 
 	ids := make(map[string]struct{})
 	assignedStories := make(map[string]string)
-	supportedFields := map[string]struct{}{"Story": {}, "Owner": {}, "Status": {}, "Next": {}, "Spec Changes": {}}
-	supportedStatuses := map[string]struct{}{"active": {}, "paused": {}, "blocked": {}, "done": {}}
+	supportedFields := map[string]struct{}{"Story": {}, "Owner": {}, "Status": {}, "Next": {}, "Spec Changes": {}, "Implementation Complete": {}, "Resume Status": {}}
 	for _, lane := range lanes {
 		if !laneIDPattern.MatchString(lane.ID) {
 			report.AddError(file, "Active Lanes has invalid lane id: "+lane.ID)
@@ -115,7 +92,7 @@ func validateActiveLanes(file, body string, stories map[string]Story, cycleStatu
 				report.AddError(file, "Active Lanes "+lane.ID+" has unsupported field: "+field)
 			}
 		}
-		for _, field := range []string{"Story", "Owner", "Status", "Next"} {
+		for _, field := range []string{"Story", "Owner", "Status", "Next", "Implementation Complete"} {
 			if lane.Fields[field] == "" {
 				report.AddError(file, "Active Lanes "+lane.ID+" missing "+field)
 			}
@@ -132,12 +109,13 @@ func validateActiveLanes(file, body string, stories map[string]Story, cycleStatu
 			}
 			assignedStories[storyID] = lane.ID
 		}
-		if _, found := supportedStatuses[lane.Fields["Status"]]; !found {
+		if !validCheckpointStatus(StoryStatus(lane.Fields["Status"])) {
 			report.AddError(file, "Active Lanes "+lane.ID+" has invalid Status: "+lane.Fields["Status"])
 		}
-		if cycleStatus == "done" && lane.Fields["Status"] != "done" {
-			report.AddError(file, "Active Lanes "+lane.ID+" must be done when execution status is done")
+		if cycleStatus == "done" {
+			report.AddError(file, "completed Cycle must not contain active Lanes")
 		}
+		validateLaneStage(file, lane, extractAcceptanceBlocks(body), report)
 		if changes := lane.Fields["Spec Changes"]; changes != "" {
 			value, err := strconv.Atoi(changes)
 			if err != nil || value < 0 {
@@ -220,21 +198,15 @@ func validateFeedback(file, body string, report *diagnostic.Report) {
 	}
 }
 
-func validateExecutionState(file, cycleID string, stories map[string]Story, text string, report *diagnostic.Report) {
+func validateExecutionState(file string, stories map[string]Story, text string, report *diagnostic.Report) {
 	document := specdoc.ParseDocument(file, text, report)
-	frontmatterKeys := []string{"cycle", "spec_rev", "status", "last_updated_at"}
-	requireKeys(file, document.Frontmatter, frontmatterKeys, report)
-	validateAllowedKeys(file, document.Frontmatter, frontmatterKeys, "Execution State", report)
-	cycle, _ := document.Frontmatter.String("cycle")
-	if cycle != cycleID {
-		report.AddError(file, "execution-state.cycle must equal "+cycleID)
-	}
+
 	revision, _ := document.Frontmatter.String("spec_rev")
 	if !revisionPattern.MatchString(revision) {
 		report.AddError(file, "spec_rev must match rev-N with N >= 1")
 	}
 	cycleStatus, _ := document.Frontmatter.String("status")
-	validCycleStatuses := map[string]struct{}{"active": {}, "paused": {}, "blocked": {}, "done": {}}
+	validCycleStatuses := map[string]struct{}{"active": {}, "blocked": {}, "done": {}}
 	if _, found := validCycleStatuses[cycleStatus]; !found {
 		report.AddError(file, "invalid execution status: "+cycleStatus)
 	}
@@ -244,31 +216,14 @@ func validateExecutionState(file, cycleID string, stories map[string]Story, text
 	}
 
 	requiredSections := []string{
-		"Progress Tree", "Current Situation", "Active Lanes",
+		"Current Situation", "Active Lanes",
 		"Acceptance Status", "Open Issues", "Practice Feedback",
 	}
 	requireSections(file, document.Body, 2, requiredSections, report)
-	validateAllowedSections(file, document.Body, 2, requiredSections, "Execution State", report)
 	allowNone := map[string]struct{}{"Current Situation": {}, "Open Issues": {}, "Practice Feedback": {}}
 	for _, name := range requiredSections {
 		_, allowed := allowNone[name]
 		requireMeaningfulSection(file, document.Body, name, allowed, report)
-	}
-
-	progressMap := make(map[string]bool)
-	for _, item := range extractProgress(file, document.Body, report) {
-		if _, found := stories[item.id]; !found {
-			report.AddError(file, "Progress Tree references missing story: "+item.id)
-		}
-		if _, duplicate := progressMap[item.id]; duplicate {
-			report.AddError(file, "Progress Tree has duplicate story: "+item.id)
-		}
-		progressMap[item.id] = item.done
-	}
-	for _, storyID := range sortedStoryIDs(stories) {
-		if _, found := progressMap[storyID]; !found {
-			report.AddError(file, "Progress Tree missing story: "+storyID)
-		}
 	}
 
 	validateActiveLanes(file, document.Body, stories, cycleStatus, report)
@@ -277,26 +232,56 @@ func validateExecutionState(file, cycleID string, stories map[string]Story, text
 
 	for _, storyID := range sortedStoryIDs(stories) {
 		story := stories[storyID]
-		done := progressMap[story.ID]
-		status := statuses[story.ID]
-		accepted := status == "accepted"
-		if done && !accepted {
-			report.AddError(file, "completed story must have accepted Acceptance status: "+story.ID)
-		}
-		if done && !story.HasOutcome {
-			report.AddError(file, "completed story must contain outcome.md: "+story.ID)
-		}
-		if accepted && !done {
-			report.AddError(file, "accepted story must be checked in Progress Tree: "+story.ID)
-		}
+		accepted := statuses[story.ID] == "accepted"
 		if accepted && !story.HasOutcome {
 			report.AddError(file, "accepted story must contain outcome.md: "+story.ID)
 		}
-		if story.HasOutcome && (!done || !accepted) {
-			report.AddError(file, "story with outcome.md must be completed and accepted: "+story.ID)
+		if story.HasOutcome && !accepted {
+			report.AddError(file, "story with outcome.md must be accepted: "+story.ID)
 		}
-		if cycleStatus == "done" && !done {
-			report.AddError(file, "all stories must be completed when execution status is done: "+story.ID)
+		if cycleStatus == "done" && !accepted {
+			report.AddError(file, "all stories must be accepted when execution status is done: "+story.ID)
 		}
+	}
+}
+
+func validateLaneStage(file string, lane FieldBlock, acceptance []FieldBlock, report *diagnostic.Report) {
+	status := StoryStatus(lane.Fields["Status"])
+	complete := lane.Fields["Implementation Complete"]
+	if complete != "true" && complete != "false" {
+		report.AddError(file, "Implementation Complete must be true or false")
+	}
+	effective := status
+	if status == StoryBlocked {
+		effective = StoryStatus(lane.Fields["Resume Status"])
+		if len(checkpointTargets(effective)) == 0 {
+			report.AddError(file, "blocked Lane requires a valid Resume Status")
+		}
+		if lane.Fields["Next"] == "none" {
+			report.AddError(file, "blocked Lane requires a recovery action")
+		}
+	} else if lane.Fields["Resume Status"] != "" {
+		report.AddError(file, "Resume Status is only valid for blocked Lanes")
+	}
+	if effective == StoryReady && complete != "true" {
+		report.AddError(file, "ready Lane requires complete implementation")
+	}
+	if complete == "true" && effective != StoryActive && effective != StoryRework && effective != StoryReady {
+		report.AddError(file, "implementation completion does not match Lane status")
+	}
+	recorded := acceptanceState(lane.Fields["Story"], acceptance)
+	expected := "pending"
+	switch effective {
+	case StoryReady:
+		expected = "ready"
+	case StoryRejected:
+		expected = "rejected"
+	case StoryRework:
+		if recorded == "rejected" {
+			return
+		}
+	}
+	if recorded != expected {
+		report.AddError(file, "Lane status does not match Acceptance Status for "+lane.Fields["Story"])
 	}
 }

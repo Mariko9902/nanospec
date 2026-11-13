@@ -26,20 +26,20 @@ acceptance_method: human | verified
 
 ## Acceptance Results
 
-Verification Context: <Spec revision; running code revision or artifact digest; environment and observation time.>
+Verification Context: {"spec_revision":"rev-<N>","code_revision":"<full-Git-commit-or-sha256:digest>","environment":"<entry>","observed_at":"<ISO-8601>"}
 
 - A1: confirmed
   - Observed: <The actual business result.>
   - Evidence Command: <The actual command, or none: manual observation.>
   - Evidence Result: <The actual command or observation result.>
   - Evidence Artifacts: <A page, response, export, snapshot, log, or report path.>
-  - Evidence Context: <Code, environment, and time for this observation; refer to the shared context if identical.>
+  - Evidence Context: {"spec_revision":"rev-<N>","code_revision":"<full-Git-commit-or-sha256:digest>","environment":"<entry>","observed_at":"<ISO-8601>"}
 - A2: confirmed
   - Observed: <The actual business result.>
   - Evidence Command: <The actual command, or none: manual observation.>
   - Evidence Result: <The actual result.>
   - Evidence Artifacts: <Artifact path.>
-  - Evidence Context: <Code, environment, and observation time.>
+  - Evidence Context: {"spec_revision":"rev-<N>","code_revision":"<full-Git-commit-or-sha256:digest>","environment":"<entry>","observed_at":"<ISO-8601>"}
 ```
 
 ## Record rules
@@ -58,6 +58,7 @@ Verification Context: <Spec revision; running code revision or artifact digest; 
 - Artifact paths are relative to `acceptance/`, such as `evidence/screenshots/detail.png`. Shared material can point to the owning Story's `acceptance/evidence/`. Moving an artifact does not change the command, version, environment, or observed fact.
 - Acceptance Results covers every Story Acceptance ID. Each item keeps `Observed` and all four evidence fields shown above, including its own `Evidence Context`.
 - For a manual observation, write `none: manual observation`; do not invent a command.
-- State shared verification background once. Record per-item differences in version, environment, or time. The code reference must identify what actually ran; describe relevant uncommitted changes or an artifact digest when a base commit alone is insufficient.
+- Context values are JSON objects containing exactly `spec_revision`, `code_revision`, `environment`, and `observed_at`. The code reference is a full 40-digit Git commit or a `sha256:` digest with 64 hexadecimal digits. Environment identifies the actual entry or working directory; the observation time includes its timezone. New observations use the prepared revision. Unaffected observations retain the revision and context under which they were actually captured.
+- `Verification Context` summarizes the latest recorded observation. Every item keeps its own complete `Evidence Context`, including when its values match the summary. Do not refer to the summary or another item instead of recording those values. Updating the summary never changes an existing item's context. The code reference must identify what actually ran; describe relevant uncommitted changes or an artifact digest when a base commit alone is insufficient.
 - A report, page, or data result can serve as evidence when it connects the item's input, expectation, and actual result. A missing result or a bare "passed" does not show what was observed.
 - Keep accepted records frozen. Correct a recording error only as such. New requirements, omissions, regressions, and later risks belong in subsequent Stories. A past result does not automatically prove that the current system still meets the same condition.

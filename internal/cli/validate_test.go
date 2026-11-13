@@ -29,9 +29,7 @@ func TestRunValidateReportsWarnings(t *testing.T) {
 func TestRunValidateRejectsSpecRootWithoutChangingCycle(t *testing.T) {
 	cycleDirectory := writeQueryFixture(t)
 	cycleFile := filepath.Join(cycleDirectory, "cycle.md")
-	stateFile := filepath.Join(cycleDirectory, "execution-state.md")
 	beforeCycle := readQueryFile(t, cycleFile)
-	beforeState := readQueryFile(t, stateFile)
 	var stdout bytes.Buffer
 	var stderr bytes.Buffer
 
@@ -40,7 +38,7 @@ func TestRunValidateRejectsSpecRootWithoutChangingCycle(t *testing.T) {
 	if code != 2 || !strings.Contains(stderr.String(), "target must be one Cycle directory") {
 		t.Fatalf("code = %d, stderr = %q", code, stderr.String())
 	}
-	if readQueryFile(t, cycleFile) != beforeCycle || readQueryFile(t, stateFile) != beforeState {
+	if readQueryFile(t, cycleFile) != beforeCycle {
 		t.Fatal("invalid target changed Cycle files")
 	}
 }

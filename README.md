@@ -24,9 +24,9 @@ My review stays with the business behavior: the interactions, API results, and s
 
 ### Story dependencies
 
-Each Story names the prerequisite results it needs in `depends_on`. NanoSpec generates a dependency graph and Dependency Waves from those declarations. This keeps actual blockers separate from the preferred order of work.
+Each Story names the prerequisite results it needs in `depends_on`. NanoSpec generates a dependency graph with execution and acceptance status labels from those declarations and the current Cycle facts. This keeps actual blockers separate from the preferred order of work.
 
-Stories in the same Wave have no dependency path between them and may run in parallel when resources and project conditions allow. A Story waits only for its own prerequisites, so unrelated work in an earlier Wave can remain unfinished. Before execution, each prerequisite result must be verified, supported by applicable evidence, and available in the current environment. See [dependency readiness](./execution-rules.md#dependency-readiness).
+Independent Stories may run in parallel when resources and project conditions allow. A Story waits only for its own prerequisites; graph position does not create an execution batch. Before execution, each prerequisite result must be verified, supported by applicable evidence, and available in the current environment. See [dependency readiness](./execution-rules.md#dependency-readiness).
 
 The example below shows a Cycle spanning sales, finance, and supporting changes. Each arrow points from a prerequisite to the Story that needs its result.
 
@@ -127,70 +127,76 @@ other details needed to achieve the goal.
 
 ### Execute one Story
 
-Once the phase is planned, I select a Story explicitly. Replace `<cycle-dir>` and `<story-dir>` below with the actual Cycle and Story directories.
+Once the phase is planned, I select a Story explicitly. Replace the document-path placeholders in the prompt below with the actual selection.
 
 ```text
 First, read:
-- Project development documentation: ./docs/develop/*
-- Current phase requirements: ./docs/prd/<package-file>.md
-- <cycle-dir>/cycle.md
-- <cycle-dir>/execution-state.md
+- Project-wide development documentation: ./docs/develop/*
+- Requirements for the current phase: <package-NN-*.md>
+- <cycle-NN-*/cycle.md>
 
-Then read the Story selected for this implementation:
-- <cycle-dir>/<story-dir>/story.md
+Then read the Story selected for this run:
+- <cycle-NN-*/story-NN-*/story.md>
 
-The goal is to implement the specified Story:
-- Assess whether this Story is ready to develop. If the specification or its
-  prerequisites are insufficient, explain what needs to change.
+The goal of this run is to implement this Story:
+- Assess whether this Story is ready for development. If its specification or
+  prerequisites are insufficient for implementation, identify what needs to
+  be adjusted.
 - If implementation may cross this Story's defined boundary, stop first and
-  explain why. Handle any specification adjustment through NanoSpec's change
-  rules before continuing.
-- Follow the Execute section of ~/coding/nanospec/SKILL.md to implement
-  this Story.
-- Before changing code, create a fresh Git worktree for this Story. Name its
-  directory <project-dir-name>-c<cycle-number>s<story-number>. Keep all
-  subsequent changes in that worktree. Carry over the required project files
-  and symlinks, including AGENTS.md, .agents, ai-issue-doc, and agents-rules.
-  Preserve symlinks and check that their targets still resolve from the new
-  worktree.
+  explain why. Handle any necessary specification adjustment through
+  NanoSpec's specification change rules.
+- Follow the Execute section of ~/coding/nanospec/SKILL.md to implement this
+  Story.
+- Before changing code, create a new worktree for this Story, named
+  <project-dir-name>-c<cycle-number>s<story-number>. All subsequent changes
+  must be made in that worktree. Also copy the symlinks for files and
+  directories such as AGENTS.md, .agents, ai-issue-doc, and agents-rules into
+  the new worktree. This is so main and all worktrees share the same rules
+  and documents.
 - Follow AGENTS.md and NanoSpec's Execute rules throughout the work.
-- Keep execution state current through NanoSpec's lifecycle commands:
-  checkpoint, evidence, verify, accept, and reject. Follow the declared
-  acceptance policy. The execution protocol comes from the package generated
-  by prepare; execution-state.md records the current facts.
-- If implementation or verification encounters a blocker outside this Story's
-  scope, stop and explain it in plain, concise language. Examples include
-  network failures, unusable login accounts, unreachable APIs, API errors,
-  missing response fields, or any unexpected request or response that blocks
-  the work.
+- Update execution state through NanoSpec's checkpoint, evidence, verify,
+  accept, and reject commands, following the declared acceptance policy.
+  The execution protocol comes from the execution package generated by
+  prepare; cycle.md records the current facts.
+- If implementation or verification encounters any blocking problem that
+  needs to be resolved outside the current goal, such as network or login
+  account issues, unreachable APIs, API errors, missing fields, or any
+  unexpected request or response results, stop and clearly state the problem
+  in plain, concise language.
 
-Verification and delivery:
-- For APIs, follow the business flow in order. Capture and check the actual
+Verification and delivery requirements:
+- For APIs, follow the business flow in order. Obtain and check the actual
   request and response at every step.
-- For persistence, query the database to confirm the saved data. A read API
-  that proves the data was persisted can also provide that evidence.
+- When saving data, query the database to confirm that it was persisted
+  correctly. A read API that proves persistence can also provide evidence.
 - For UI work, use better-playwright to check layout, buttons, clicks, and
   interactions through the actual interface.
-- For a flow spanning UI, APIs, and stored data, verify it end to end. Use
-  better-playwright's native network monitoring to capture live requests and
-  responses. Compare the response with the rendered UI and check persisted
-  state through a database query or the read API described above. Confirm
-  that they all reflect the same action and result.
-- Where possible, run the full better-playwright verification after the
-  implementation is complete. Avoid repeatedly running the full UI flow
-  during development and spending tokens on the same checks.
-- Provide a manual test entry: startup commands, access URLs, required
-  accounts, and the steps needed to inspect the result.
+- For a business flow spanning UI, APIs, and persisted data, perform
+  end-to-end verification. Use better-playwright's native network monitoring
+  to capture live requests and responses. Check the rendered UI against the
+  responses, and confirm persistence through a database query or the read
+  API described above. Ensure that all three reflect the same operation
+  and its result.
+- Where conditions allow, perform the full better-playwright verification
+  after implementation is complete. Avoid repeatedly performing full UI
+  flows during development and consuming large numbers of tokens.
+- Provide a manual test entry, including startup commands, access URLs,
+  required accounts, and the steps for checking the results.
 
 Before proposing any solution or writing code, analyze the requirements and
-the project's current implementation. Explain your understanding of the goal,
-what work is needed given the existing implementation, and the gap between
-the current state and that goal.
+how the current project is implemented. Explain your understanding of the
+goal, what work is needed to achieve it given the existing implementation,
+and the gap between the two.
 
 Most importantly, clearly identify any ambiguity, unclear expectations, or
-key assumptions you have made, and list the questions that must be clarified
-to align the requirements. This step lets me confirm that your understanding
-matches my intent and exposes any missing or unclear requirements.
+key assumptions you have made. List the questions that must be clarified to
+align the requirements. The purpose of this step is to let me confirm that
+your understanding matches my intent and expose anything missing or unclear
+in the requirements.
+
+Complete all of the above analysis first, then provide the full analysis and
+questions requiring clarification in one response. Do not ask me questions
+partway through.
 ```
 
 English is the default. A request such as `Spec language: Japanese (Japan), ja-JP` changes the document language. The choice is stored in `cycle.md` as `spec_language` and carried into execution packages. Existing Cycles keep their recorded language unless explicitly changed.
@@ -211,7 +217,6 @@ A typical layout:
 spec/
   cycle-01-orders/
     cycle.md
-    execution-state.md
     story-01-save-order/
       story.md
       implementation-brief.md
@@ -230,7 +235,7 @@ Artifact paths are relative to `acceptance/`, for example `evidence/order.png`. 
 
 1. Read the project rules, source requirements, and current code. Set the spec language.
 2. Find the independently deliverable results and their actual prerequisites.
-3. Write `cycle.md`, each `story.md`, and `execution-state.md`. Add an implementation brief only when it saves worthwhile investigation.
+3. Write `cycle.md` with planning and execution facts, and each `story.md`. Add an implementation brief only when it saves worthwhile investigation.
 4. Run `nanospec validate --sync-views <cycle-dir>` and resolve the diagnostics.
 5. Have a separate review context read the original requirements, relevant project facts, and the complete first draft. Fix the findings and check the affected material again.
 6. Select a Story explicitly and run `nanospec prepare <story-dir>` before execution.
@@ -264,11 +269,11 @@ nanospec validate --sync-views <cycle-dir>
 
 Both commands accept one Cycle. Omit the path to use the current directory.
 
-The first command is read-only. The second rebuilds Dependency Waves and the dependency graph from `depends_on`, and the progress tree from acceptance states. It validates the complete result before saving. Errors leave the files untouched. Repeating a synchronization with unchanged input writes nothing.
+The first command is read-only. The second rebuilds the dependency graph and status labels from Story `depends_on`, Active Lanes, and Acceptance Status in `cycle.md`. It validates the complete result before saving. Errors leave files untouched. Repeating synchronization with unchanged input writes nothing.
 
-Within a Wave, existing relative order stays intact. Coordination notes can follow the Story on the same line after a semicolon or in paragraphs below it. Notes move with the Story and stay out of graph labels. The rest of the documents, `spec_rev`, and `last_updated_at` are preserved. Regenerating a view does not create a new revision.
+Every Story appears, including isolated nodes. Titles come from `Orientation/Title`; redundant dependency edges are omitted. Each node starts with one bracketed status: pending, active, ready, rejected, rework, blocked, or accepted. Only `accepted` means the result has an Outcome. The labels and colors do not establish evidence or acceptance.
 
-On the first draft, an ordered list of all Story IDs is enough; Wave headings and titles can be generated. The titles come from each Story's `Orientation/Title`. A dependency already implied by another path produces a cleanup warning and is omitted from the graph.
+Planning Context keeps priorities and coordination notes. Updating the graph and derived Cycle summary preserves that prose, `spec_rev`, and `last_updated_at`; it does not create a new specification revision.
 
 Synchronization already includes full validation. A second read-only run is unnecessary unless something changed.
 
@@ -276,15 +281,13 @@ Synchronization already includes full validation. A second read-only run is unne
 
 ```sh
 nanospec show overview <cycle-dir>
-nanospec show waves <cycle-dir>
 nanospec show graph <cycle-dir>
-nanospec show tree <cycle-dir>
 nanospec ready <cycle-dir>
 ```
 
-`overview` collects Story titles and scenarios in Wave order. It gives a quick view of the work without copying definitions or acceptance conditions.
+`overview` collects Story titles, current states, and scenarios in dependency order. It gives a quick view of the work without copying definitions or acceptance conditions.
 
-`ready` lists all unassigned `pending` or `rejected` Stories whose recorded prerequisites are `ready` or `accepted`. It respects Wave order and the order inside each Wave. It does not choose work or start it. Evidence applicability, environment availability, and any required human approval still need to be checked.
+`ready` lists all unassigned `pending` or `rejected` Stories whose recorded prerequisites are `ready` or `accepted`. Candidates appear in stable Story ID order. It does not choose work or start it. Evidence applicability, environment availability, and any required human approval still need to be checked.
 
 ### Prepare the selected work
 
@@ -293,22 +296,30 @@ nanospec prepare <story-dir-or-story.md>...
 nanospec prepare --json <story-dir-or-story.md>...
 ```
 
-Preparation includes only the explicit selection. Each package contains the specification revision, spec language, acceptance state, dependency states, startup condition, and confirmations still needed at the project site. Markdown includes `Spec Language`; JSON includes `spec_language` in the `nanospec.prepare.v1` envelope. An omitted Cycle language resolves to `en-US`.
+Preparation includes only the explicit selection. Each package contains the specification revision, spec language, acceptance state, dependency states, startup condition, and confirmations still needed at the project site. Markdown includes `Spec Language`; JSON includes `spec_language`, the current Story `status`, and its `resume_status` when blocked in the `nanospec.prepare.v1` envelope. An omitted Cycle language resolves to `en-US`.
 
 The package includes the execution rules embedded in the same CLI build. Hand this package to the executing agent instead of a bare Story or state file. Project rules and live code still come from the target project.
 
-`ready_for_confirmation` means the recorded states allow further checks. `waiting_for_selected_dependency` means a prerequisite was selected in the same request but must reach `ready` or `accepted` first. Unselected prerequisites that are not ready, open questions, pending acceptance, and already accepted work return a nonzero status. Selection never implies that every item starts at once.
+`ready_for_confirmation` means the recorded states allow further checks. `waiting_for_selected_dependency` means a prerequisite was selected in the same request but must reach `ready` or `accepted` first. A recorded blocker returns a `blocked` gate and a nonzero status with its package intact. Read the cause and recovery target before proceeding. Unselected prerequisites that are not ready, open questions, pending acceptance, and already accepted work also return a nonzero status. Selection never implies that every item starts at once.
 
 A Story with `regression_of` also receives the referenced definition and Outcome as frozen context. Content digests detect changes to the accepted Story. Historical external human acceptance records with missing artifact locations and evidence context can be included only under the documented checks, with a warning. Their original text is kept; their conclusions do not replace current evidence. [Change rules](./spec-change-rules.md).
+
+### Check the execution baseline
+
+Keep `spec_revision` from the execution package. Pass that exact value as `--spec-revision` to every checkpoint, evidence, verification, acceptance, or rejection command. A command checks it after acquiring the Cycle lock and refuses a stale version without changing records. Preparation and writes do not require an external coordinator.
+
+After a mismatch, prepare again and assess the changed definition, prerequisite results, implementation, and evidence. Do not simply substitute the latest number. Unaffected evidence can continue after assessment; changed conditions need fresh observations. Check before a new implementation stage, before changing shared contracts, and before verification or acceptance. An external notification may bring the check forward, but cannot replace it.
 
 ### Save a checkpoint
 
 ```sh
-nanospec checkpoint --owner <executor-id> --status active \
+nanospec checkpoint --spec-revision <rev-N> --owner <executor-id> --status active \
   --next "<next action>" --situation "<current fact>" <story>
 ```
 
-Checkpoint status is `active`, `paused`, `blocked`, or `done`. `blocked` requires `--issue`. `done` requires `--next none`. Except for a blocked checkpoint, open questions must be clear and prerequisites must be `ready` or `accepted`.
+Checkpoint status is pending, active, ready, rejected, rework, or blocked. It must follow the recorded stage: first work starts active, a rejected result starts repair with rework, and ready/accepted are established by verification/acceptance. A blocked checkpoint requires `--issue` and a recovery action, and preserves its prior stage as Resume Status. Resolve the cause and restore that stage; restoring ready also requires current passed evidence.
+
+Use `--complete --next none` to mark implementation complete in active or rework. Self-checks still run in that stage; only a passed verification reaches ready. Rejection waits for an actual repair assignment and cannot be skipped by recording evidence. Active, rework, and ready recovery require resolved Open Questions and ready or accepted prerequisites.
 
 Each Story has one Lane. `Owner` identifies the executor responsible for continuing it. It uses the same identifier format as `implemented_by`, for example `finance-a`, with no spaces. Ownership can change before evidence exists. Once `acceptance/evidence.md` exists, a direct Owner change is rejected. The original Owner can continue recording evidence.
 
@@ -320,46 +331,48 @@ Edit the requirements baseline, Story, and affected relationships first. Then li
 nanospec revise --reason "<semantic change>" <affected-story>...
 ```
 
-The command validates the edited specification, synchronizes generated views, increments the Cycle revision once, and returns affected Stories to `pending`. Started Lanes gain one spec-change event. All in-progress evidence moves to the new Cycle revision; only explicitly affected evidence becomes stale. Removed or renamed Acceptance IDs drop from the affected in-progress record.
+The command validates the edited specification, synchronizes generated views, increments the Cycle revision once, and invalidates the affected acceptance facts. Unstarted work stays pending, existing rejections still wait for an assignment, and started work records its recovery stage. Started affected Lanes gain one spec-change event and a recovery action to reassess the new baseline. Current rejections and existing blockers are preserved. All in-progress evidence moves to the new Cycle revision; only explicitly affected evidence becomes stale. Removed or renamed Acceptance IDs drop from the affected in-progress record.
 
 The command records the revision. It does not write the Story or infer the affected set.
 
 ### Record observations and review them
 
 ```sh
-nanospec evidence --implemented-by <executor-id> --acceptance A1 \
+nanospec evidence --spec-revision <rev-N> --implemented-by <executor-id> --acceptance A1 \
   --observed "<observed result>" --command "<command or none: manual observation>" \
   --result "<actual result>" --artifacts "<artifact path>" \
-  --context "<revision, code, environment, and time>" <story>
+  --context '{"spec_revision":"<rev-N>","code_revision":"<full-Git-commit-or-sha256:digest>","environment":"<entry>","observed_at":"<ISO-8601>"}' <story>
 
-nanospec checkpoint --owner <executor-id> --status done \
+nanospec checkpoint --spec-revision <rev-N> --owner <executor-id> --status active --complete \
   --next none --situation "<implementation result>" <story>
 
-nanospec verify --verified-by <executor-id> --mode self --result pass <story>
-nanospec verify --verified-by <reviewer-id> --mode independent --result rework <story>
+nanospec verify --spec-revision <rev-N> --verified-by <executor-id> --mode self --result pass <story>
+nanospec verify --spec-revision <rev-N> --verified-by <reviewer-id> --mode independent --result rework <story>
 ```
 
 Evidence must reference an existing Acceptance ID and match the Lane Owner. Recording the same ID replaces that item's current observation. Stale evidence needs a fresh observation.
 
-`pass` requires complete, current evidence and a done checkpoint, then moves acceptance to `ready`. `rework` adds one rework round and returns acceptance to `pending`. Self review requires the implementer and verifier to match. Independent review requires different identities. Neither review mode makes the final acceptance decision.
+`pass` requires complete, current evidence and a complete implementation checkpoint, then moves acceptance to `ready`. `rework` adds one return-to-implementation round and sets the Story to rejected; repair starts only after an explicit rework checkpoint. Self review requires the implementer and verifier to match. Independent review requires different identities. Neither review mode makes the final acceptance decision.
 
 Before a passed review or final acceptance, the CLI rechecks open questions and prerequisite states. A prerequisite returning to `pending` or being rejected blocks the action. Acceptance also checks that `story.md` still matches the prepared content before freezing it.
 
-Shared verification background uses `Verification Context:`. The label is fixed English; its value follows the spec language. Keep raw commands and observed output in their original form.
+`--context` is one JSON object with `spec_revision`, `code_revision`, `environment`, and `observed_at`. The revision must equal `--spec-revision`; the code reference is a full 40-digit Git commit or `sha256:` followed by 64 hexadecimal digits. Environment is a non-empty entry or working directory, and observation time is ISO-8601 with a timezone. Missing fields, unknown fields, references, and trailing values are rejected.
+
+`Verification Context:` summarizes the latest recorded observation. Every Acceptance item stores its own complete JSON context in `Evidence Context`. Updating the summary preserves each item's original values. These keys and record labels are fixed English; environment labels follow the spec language and actual entries retain their original text. Keep raw commands and observed output in their original form.
 
 ### Accept or reject
 
 Run acceptance only after the required authority has been established:
 
 ```sh
-nanospec accept --accepted-by <acceptor-id> --method human <story>
-nanospec accept --accepted-by <executor-id> --method verified <story>
-nanospec reject --rejected-by <acceptor-id> --reason "<observed problem>" <story>
+nanospec accept --spec-revision <rev-N> --accepted-by <acceptor-id> --method human <story>
+nanospec accept --spec-revision <rev-N> --accepted-by <executor-id> --method verified <story>
+nanospec reject --spec-revision <rev-N> --rejected-by <acceptor-id> --reason "<observed problem>" <story>
 ```
 
 Acceptance requires a passed review at the current revision. `verified` also requires the Story's authorization, scope, coverage review, and independent verification. On success, evidence becomes Outcome, the Lane is removed, and progress updates. The last accepted Story completes the Cycle. A failed write restores the original records.
 
-Rejection applies to a `ready` delivery. It records the decision, returns evidence for rework, adds one rework round, and pauses the Lane. A new observation returns acceptance to `pending`.
+Rejection applies to a delivery whose checks passed. If that ready result is currently blocked, the rejection preserves the blocker and sets its recovery target to rejected. It records the decision, returns evidence for rework, adds one rework round, and records the rejection. A new observation returns acceptance to `pending`.
 
 ## Rules and templates
 
@@ -375,7 +388,6 @@ Rejection applies to a `ready` delivery. It records the decision, returns eviden
 | [Cycle template](./cycle-spec-template.md) | Planning and coordination |
 | [Story template](./story-spec-template.md) | The complete authoring interface for one Story |
 | [Implementation brief](./implementation-brief-template.md) | Optional repository findings |
-| [Execution state](./execution-state-template.md) | Recovery and acceptance state |
 | [Outcome template](./outcome-record-template.md) | Frozen acceptance evidence |
 
 Each rules file owns its subject. The concept model settles semantic conflicts. Templates keep the format and the guidance needed to fill it in one place. The CLI implements the stable checks that can be made mechanically; it does not add requirements of its own.

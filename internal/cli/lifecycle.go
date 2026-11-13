@@ -10,7 +10,7 @@ import (
 	"nanospec/internal/validator"
 )
 
-const checkpointHelp = "Usage: nanospec checkpoint --owner <id> --status <active|paused|blocked|done> --next <text> --situation <text> [--issue <text>] <story>\n\n" +
+const checkpointHelp = "Usage: nanospec checkpoint --spec-revision <rev-N> --owner <id> --status <pending|active|ready|rejected|rework|blocked> --next <text> --situation <text> [--complete] [--issue <text>] <story>\n\n" +
 	"Atomically update the explicitly selected Story's current execution facts."
 
 const reviseHelp = "Usage: nanospec revise --reason <text> <story>...\n\n" +
@@ -22,9 +22,11 @@ func runCheckpoint(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 	flags := flag.NewFlagSet("checkpoint", flag.ContinueOnError)
+	specRevision := flags.String("spec-revision", "", "")
 	flags.SetOutput(io.Discard)
 	owner := flags.String("owner", "", "")
 	status := flags.String("status", "", "")
+	complete := flags.Bool("complete", false, "")
 	next := flags.String("next", "", "")
 	situation := flags.String("situation", "", "")
 	issue := flags.String("issue", "", "")
@@ -33,12 +35,14 @@ func runCheckpoint(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	result, validation := validator.SaveStoryCheckpoint(flags.Args()[0], validator.CheckpointRequest{
-		Owner:     *owner,
-		Status:    *status,
-		Next:      *next,
-		Situation: *situation,
-		Issue:     *issue,
-		At:        time.Now(),
+		SpecRevision: *specRevision,
+		Owner:        *owner,
+		Status:       *status,
+		Complete:     *complete,
+		Next:         *next,
+		Situation:    *situation,
+		Issue:        *issue,
+		At:           time.Now(),
 	})
 	if code := reportQueryResult(validation, stderr); code != 0 {
 		return code

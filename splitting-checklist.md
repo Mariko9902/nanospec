@@ -1,6 +1,6 @@
 # Semantic Review
 
-Use the CLI for the mechanical checks first: directories, metadata, headings, references, Acceptance IDs, Outcomes, state, dependencies, Waves, graph, progress, and flow coverage. This checklist is for the meaning and risk those checks cannot settle.
+Use the CLI for the mechanical checks first: directories, metadata, headings, references, Acceptance IDs, Outcomes, state, dependencies, graph status labels, and flow coverage. This checklist is for the meaning and risk those checks cannot settle.
 
 ## Review scope
 
@@ -75,7 +75,7 @@ Full depth means explaining the risks that actually matter. It does not mean fil
 - Does every `depends_on` edge mean the result cannot stand without the prerequisite's actual result?
 - When a prerequisite requires human acceptance, is its human-accepted Outcome available, or is a separately obtained confirmation recorded in the current Story's state explanation?
 - Does the downstream Story explain the connection to existing results without asking the upstream Story for an empty placeholder?
-- Does order inside a Wave reflect a useful priority without becoming an implicit dependency? Have downstream value, the main path, risk, feedback, workload, and available resources been considered?
+- Do the priorities in Planning Context remain distinct from dependency edges? Have downstream value, the main path, risk, feedback, workload, and available resources been considered?
 - Can selected parallel work edit the project safely? Are edit conflicts handled through scheduling rather than fabricated business edges?
 
 ## Briefs and state

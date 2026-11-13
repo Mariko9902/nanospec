@@ -4,10 +4,9 @@ Use these rules when execution uncovers a missing requirement, a changed project
 
 The files have different jobs:
 
-- `cycle.md`: organization, order, and dependencies.
+- `cycle.md`: planning, dependency graph, specification revision, and current execution and acceptance facts.
 - `story.md`: requirements, execution boundary, and acceptance.
 - `implementation-brief.md`: optional repository findings and suggestions.
-- `execution-state.md`: current execution and acceptance facts.
 - `acceptance/outcome.md`: the accepted result.
 - The PRD or designated product requirements baseline: the source product requirements used to write the Cycle.
 
@@ -51,7 +50,7 @@ A changed acceptance policy or authorization scope is a formal decision and incr
 
 Once Open Questions are resolved and the requirements baseline is synchronized, the current Acceptance conditions become the baseline for starting or resuming implementation.
 
-An unfinished Story can still change through a new product decision. Stop implementation, update the Story, product baseline, related unfinished work, Cycle, and state, then continue.
+An unfinished Story can still change through a new product decision. Stop implementation, update the Story, product baseline, related unfinished work, and the planning and execution facts in `cycle.md`, then continue.
 
 These are not reasons to redefine success:
 
@@ -64,9 +63,9 @@ Correct the implementation or evidence, explain why acceptance is unreachable, o
 
 ## 1. Update state only
 
-Use state updates for progress, pause or resume, external blockers, recovery actions, actual acceptance transitions, temporary implementation steps, and method feedback.
+Use state updates for progress, blocking or recovery, external blockers, recovery actions, actual acceptance transitions, temporary implementation steps, and method feedback.
 
-Read current state and update the selected entries, timestamp, and generated views through the relevant CLI commands. Do not create permanent work nodes for temporary actions or advance `spec_rev` for progress. Owner changes follow the evidence restrictions in the [state template](./execution-state-template.md).
+Read current state and update the selected entries, timestamp, and generated views through the relevant CLI commands. Do not create permanent work nodes for temporary actions or advance `spec_rev` for progress. Owner changes follow the evidence restrictions in the [Cycle execution state](./cycle-spec-template.md#execution-and-acceptance).
 
 ## 2. Update an implementation brief
 
@@ -133,7 +132,7 @@ Examples include a feature, migration, setup result, stability improvement, regr
 
 1. Use the next unused Story number. Do not renumber existing work to insert it.
 2. Create its Story file and an optional brief when justified.
-3. Add it to Dependency Waves and give it an Acceptance Status block. Update the current facts and timestamp.
+3. Create its Story directory and give it an Acceptance Status block in `cycle.md`. Update the current facts and timestamp.
 4. Validate and run one revision listing all affected Stories, including the new one.
 5. Check related unfinished work, synchronize views, and independently review the new Story and affected relationships.
 6. For the first Cycle or an unclear impact, review the complete draft. Fix findings, check their consequences, and validate again.
@@ -155,8 +154,8 @@ Check that:
 - Business Logic, Constraints, and Applicable Rules agree.
 - Acceptance can still stand on its own and Out of Scope still holds.
 - Brief findings and directions still fit the code.
-- Waves, priority, notes, graph order, and edges still describe the actual plan.
-- State references every Story and the progress tree follows Wave order.
+- Planning Context priorities, notes, and graph edges still describe the actual plan.
+- Acceptance Status references every Story, and the graph displays every current state.
 
 Downstream work uses a real upstream result. If that result changes, reassess the connection against the system as it now exists.
 
@@ -165,7 +164,7 @@ Downstream work uses a real upstream result. If that result changes, reassess th
 Follow the [completion rules](./execution-rules.md#6-completion) and [Outcome format](./outcome-record-template.md):
 
 1. Implement and observe the real business behavior. Record evidence for every Acceptance ID at the current revision.
-2. Save a done checkpoint and record verification with the actual verifier. A pass reaches `ready`, not completion.
+2. Mark implementation complete with `checkpoint --complete --next none` and record verification with the actual verifier. A pass reaches `ready`, not completion.
 3. Run acceptance only after the explicit human decision or every condition of the declared `verified` authorization has been established.
 4. Acceptance freezes `evidence.md` as `outcome.md`, removes the Lane, and updates state and progress. The last accepted Story completes the Cycle.
 
@@ -185,16 +184,16 @@ A repeated, structural, or high-risk problem in the method may need a change to 
 
 | Finding | Update | `spec_rev` |
 | --- | --- | --- |
-| Progress, pause, blocker, or next action | State | Unchanged |
+| Progress, blocker, recovery, or next action | Execution fields in `cycle.md` | Unchanged |
 | Repository location, fact, or suggestion | Brief | Unchanged |
-| Equivalent wording, layout, or a redundant resolved question | The source document and state as needed | Unchanged |
-| A previously undecided requirement or a changed product decision | Story, product baseline, affected unfinished work, and state | Advance only affected Cycles with changed execution meaning |
-| Scope, rules, dependencies, or acceptance | Story and state | Advance |
-| Meaning-preserving repartition of unstarted work | Stories, repartition record, and state | Advance |
-| Priority inside a Wave or dependencies | Cycle and state | Advance |
-| A new independent result | New Story, Cycle, and state | Advance |
-| A regression after acceptance | New Story with `regression_of`, Cycle, and state | Advance |
-| Accepted observations | Outcome and state | No advance solely for recording a result |
+| Equivalent wording, layout, or a redundant resolved question | The source document and relevant execution fields in `cycle.md` | Unchanged |
+| A previously undecided requirement or a changed product decision | Story, product baseline, affected unfinished work, and `cycle.md` | Advance only affected Cycles with changed execution meaning |
+| Scope, rules, dependencies, or acceptance | Story and `cycle.md` | Advance |
+| Meaning-preserving repartition of unstarted work | Stories and the repartition record and execution fields in `cycle.md` | Advance |
+| Execution priority or dependencies | Planning and execution fields in `cycle.md` | Advance |
+| A new independent result | New Story and `cycle.md` | Advance |
+| A regression after acceptance | New Story with `regression_of` and `cycle.md` | Advance |
+| Accepted observations | Outcome and execution fields in `cycle.md` | No advance solely for recording a result |
 | A method problem | Feedback and NanoSpec when warranted | Depends on execution meaning |
 
 ## Update order

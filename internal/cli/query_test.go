@@ -21,19 +21,15 @@ func TestRunReadOnlyQueries(t *testing.T) {
 		t.Fatal(err)
 	}
 	cycleFile := filepath.Join(cycleDirectory, "cycle.md")
-	stateFile := filepath.Join(cycleDirectory, "execution-state.md")
 	beforeCycle := readQueryFile(t, cycleFile)
-	beforeState := readQueryFile(t, stateFile)
 
 	checks := []struct {
 		args     []string
 		contains string
 	}{
-		{[]string{"show", "overview", cycleDirectory}, "### Look up the base result (`story-01-base`)"},
-		{[]string{"show", "waves", cycleDirectory}, "### Dependency Waves"},
-		{[]string{"show", "graph", cycleDirectory}, "### Dependency Graph"},
-		{[]string{"show", "tree", cycleDirectory}, "## Progress Tree"},
-		{[]string{"ready", cycleDirectory}, "story-01-base | Wave 1"},
+		{[]string{"show", "overview", cycleDirectory}, "## [pending] Look up the base result (story-01-base)"},
+		{[]string{"show", "graph", cycleDirectory}, "## Dependency Graph"},
+		{[]string{"ready", cycleDirectory}, "story-01-base | acceptance=pending"},
 		{[]string{"prepare", filepath.Join(cycleDirectory, "story-01-base")}, "# NanoSpec Execution Preparation"},
 	}
 	for _, check := range checks {
@@ -46,7 +42,7 @@ func TestRunReadOnlyQueries(t *testing.T) {
 			t.Fatalf("args = %#v, stdout = %q", check.args, stdout.String())
 		}
 	}
-	if readQueryFile(t, cycleFile) != beforeCycle || readQueryFile(t, stateFile) != beforeState {
+	if readQueryFile(t, cycleFile) != beforeCycle {
 		t.Fatal("read-only query changed files")
 	}
 }
@@ -149,38 +145,22 @@ flowchart TD
 	writeQueryFile(t, filepath.Join(cycleDirectory, "cycle.md"), `---
 id: cycle-01-query
 window: [current]
+spec_rev: rev-1
+status: active
+last_updated_at: 2026-09-10T10:00:00+08:00
 ---
 
 ## Planning Context
 
 - Current delivery.
 
-## Story Plan
-
-### Dependency Waves
-
-#### Wave 1
-
-1. `+"`"+`story-01-base`+"`"+`: Look up the base result
-
-### Dependency Graph
+## Dependency Graph
 
 - none
 
 ## Risks
 
 - none
-`)
-	writeQueryFile(t, filepath.Join(cycleDirectory, "execution-state.md"), `---
-cycle: cycle-01-query
-spec_rev: rev-1
-status: active
-last_updated_at: 2026-09-10T10:00:00+08:00
----
-
-## Progress Tree
-
-- [ ] story-01-base
 
 ## Current Situation
 

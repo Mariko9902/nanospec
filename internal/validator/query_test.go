@@ -31,7 +31,7 @@ func TestLoadCycleSnapshotBuildsViewsWithoutWriting(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, fragment := range []string{"# Cycle Overview", "## Wave 1", "### Save an order (`story-01-base`)", "## Wave 2", "### Save an order (`story-02-order`)", "- Scenario: 『Clerk』 confirms the 『order』 and runs 「Save」"} {
+	for _, fragment := range []string{"# Cycle Overview", "## [pending] Save an order (story-01-base)", "## [pending] Save an order (story-02-order)", "- Scenario: 『Clerk』 confirms the 『order』 and runs 「Save」"} {
 		if !strings.Contains(overview, fragment) {
 			t.Fatalf("overview missing %q:\n%s", fragment, overview)
 		}
@@ -47,13 +47,13 @@ func TestLoadCycleSnapshotBuildsViewsWithoutWriting(t *testing.T) {
 	}
 }
 
-func TestReadyCandidatesUseWaveOrderAndDependencyStatus(t *testing.T) {
+func TestReadyCandidatesUseStoryOrderAndDependencyStatus(t *testing.T) {
 	cycleDirectory := writeCycleFixture(t, map[string][]string{
 		"story-01-base":  {},
 		"story-02-order": {"story-01-base"},
 		"story-03-help":  {},
 	})
-	stateFile := filepath.Join(cycleDirectory, "execution-state.md")
+	stateFile := filepath.Join(cycleDirectory, "cycle.md")
 	state := readTestFile(t, stateFile)
 	state = strings.Replace(state, "Acceptance: pending: not observed", "Acceptance: ready: observed", 1)
 	writeFixtureFile(t, stateFile, state)
@@ -66,19 +66,19 @@ func TestReadyCandidatesUseWaveOrderAndDependencyStatus(t *testing.T) {
 	if len(candidates) != 2 {
 		t.Fatalf("candidates = %#v", candidates)
 	}
-	if candidates[0].StoryID != "story-03-help" || candidates[1].StoryID != "story-02-order" {
+	if candidates[0].StoryID != "story-02-order" || candidates[1].StoryID != "story-03-help" {
 		t.Fatalf("candidate order = %#v", candidates)
 	}
-	if len(candidates[1].Dependencies) != 1 || candidates[1].Dependencies[0].Acceptance != "ready" {
+	if len(candidates[0].Dependencies) != 1 || candidates[0].Dependencies[0].Acceptance != "ready" {
 		t.Fatalf("dependent candidate = %#v", candidates[1])
 	}
 }
 
 func TestReadyCandidatesExcludeAssignedStory(t *testing.T) {
 	cycleDirectory := writeCycleFixture(t, map[string][]string{"story-01-base": {}})
-	stateFile := filepath.Join(cycleDirectory, "execution-state.md")
+	stateFile := filepath.Join(cycleDirectory, "cycle.md")
 	state := readTestFile(t, stateFile)
-	state = strings.Replace(state, "## Active Lanes\n\n- none", "## Active Lanes\n\n- Lane: lane-01\n  - Story: story-01-base\n  - Owner: executor-a\n  - Status: active\n  - Next: continue", 1)
+	state = strings.Replace(state, "## Active Lanes\n\n- none", "## Active Lanes\n\n- Lane: lane-01\n  - Story: story-01-base\n  - Owner: executor-a\n  - Status: active\n  - Next: continue\n  - Implementation Complete: false", 1)
 	writeFixtureFile(t, stateFile, state)
 
 	snapshot, result := LoadCycleSnapshot(cycleDirectory)
@@ -166,6 +166,12 @@ func TestResolvePreparationGatesUsesExplicitSelection(t *testing.T) {
 		{CycleID: "cycle-01-sample", StoryID: "story-06-question", Acceptance: "pending", OpenQuestions: true},
 	}
 
+	for index := range packages {
+		packages[index].Status = StoryStatus(packages[index].Acceptance)
+		for j := range packages[index].Dependencies {
+			packages[index].Dependencies[j].Status = StoryStatus(packages[index].Dependencies[j].Acceptance)
+		}
+	}
 	ResolvePreparationGates(packages)
 
 	want := []string{"ready_for_confirmation", "waiting_for_selected_dependency", "blocked_by_dependency", "awaiting_acceptance", "accepted", "blocked_by_open_questions"}
